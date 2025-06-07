@@ -23,16 +23,16 @@ func (r *CardRepository) Create(card *models.Card) error {
 
 func (r *CardRepository) FindByID(id uint) (*models.Card, error) {
 	var card models.Card
-	// Preload AssignedUser and Supervisor
-	err := r.db.Preload("AssignedUser").Preload("Supervisor").First(&card, id).Error
+	// Preload AssignedUser, Supervisor and Collaborators
+	err := r.db.Preload("AssignedUser").Preload("Supervisor").Preload("Collaborators").First(&card, id).Error
 	return &card, err
 }
 
 func (r *CardRepository) FindByListID(listID uint) ([]models.Card, error) {
 	var cards []models.Card
-	// Preload AssignedUser and Supervisor for each card
+	// Preload AssignedUser, Supervisor and Collaborators for each card
 	err := r.db.Where("list_id = ?", listID).Order("position ASC").
-		Preload("AssignedUser").Preload("Supervisor").
+		Preload("AssignedUser").Preload("Supervisor").Preload("Collaborators").
 		Find(&cards).Error
 	return cards, err
 }

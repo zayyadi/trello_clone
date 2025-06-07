@@ -55,11 +55,8 @@ export const fetchBoardDetails = createAsyncThunk(
   'boards/fetchBoardDetails',
   async (boardId, { rejectWithValue }) => {
     try {
-      // Backend's GET /boards/:boardID should return board with its lists and cards preloaded
-      // If not, you'd make separate calls for lists and then cards for each list.
-      // Assuming backend returns: { id, name, description, owner, lists: [{id, name, cards: [{id, title, ...}]}] }
       const response = await apiClient.get(`/boards/${boardId}`);
-      return response.data.data; // This should be the full board object
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not fetch board details');
     }
@@ -71,7 +68,7 @@ export const updateList = createAsyncThunk(
   async ({ listId, listData }, { rejectWithValue }) => {
     try {
       const response = await apiClient.put(`/lists/${listId}`, listData);
-      return response.data.data; // Should be the updated list
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not update list');
     }
@@ -83,7 +80,7 @@ export const deleteList = createAsyncThunk(
   async (listId, { rejectWithValue }) => {
     try {
       await apiClient.delete(`/lists/${listId}`);
-      return listId; // Return the ID of the deleted list
+      return listId;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not delete list');
     }
@@ -95,7 +92,7 @@ export const addListToBoard = createAsyncThunk(
   async ({ boardId, name }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post(`/boards/${boardId}/lists`, { name });
-      return response.data.data; // Should be the newly created list
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not add list');
     }
@@ -104,14 +101,14 @@ export const addListToBoard = createAsyncThunk(
 
 export const addCardToList = createAsyncThunk(
   'boards/addCardToList',
-  async ({ listId, title, description, dueDate, assignedUserID, supervisorID }, { rejectWithValue }) => { // Added new fields
+  async ({ listId, title, description, dueDate, assignedUserID, supervisorID }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post(`/lists/${listId}/cards`, { 
           title, 
-          description, // Optional
-          dueDate, // Optional
-          assignedUserID, // Optional
-          supervisorID // Optional
+          description,
+          dueDate,
+          assignedUserID,
+          supervisorID
         });
       return response.data.data;
     } catch (error) {
@@ -125,7 +122,7 @@ export const updateCard = createAsyncThunk(
   async ({ cardId, cardData }, { rejectWithValue }) => {
     try {
       const response = await apiClient.put(`/cards/${cardId}`, cardData);
-      return response.data.data; // Should be the updated card
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not update card');
     }
@@ -134,11 +131,11 @@ export const updateCard = createAsyncThunk(
 
 export const updateCardDetails = createAsyncThunk(
   'boards/updateCardDetails',
-  async (cardData, { rejectWithValue }) => { // cardData: { cardId, title, description, dueDate, status, assignedUserID, supervisorID }
+  async (cardData, { rejectWithValue }) => {
     const { cardId, ...updatePayload } = cardData;
     try {
       const response = await apiClient.put(`/cards/${cardId}`, updatePayload);
-      return response.data.data; // Updated card
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not update card');
     }
@@ -150,7 +147,7 @@ export const deleteCard = createAsyncThunk(
   async (cardId, { rejectWithValue }) => {
     try {
       await apiClient.delete(`/cards/${cardId}`);
-      return cardId; // Return the ID of the deleted card
+      return cardId;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not delete card');
     }
@@ -161,29 +158,20 @@ export const moveCard = createAsyncThunk(
   'boards/moveCard',
   async ({ cardId, targetListId, newPosition }, { rejectWithValue }) => {
     try {
-      // Note: Backend expects 1-based indexing for position
       const response = await apiClient.patch(`/cards/${cardId}/move`, { targetListId, newPosition });
-      return response.data.data; // Updated card
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not move card');
     }
   }
 );
 
-// Thunk for updating card order within the same list (if backend supports direct position update)
 export const updateCardOrderInList = createAsyncThunk(
   'boards/updateCardOrderInList',
-  async ({ cardId, newPosition, listId /* for optimistic update reference */ }, { rejectWithValue }) => {
+  async ({ cardId, newPosition, listId }, { rejectWithValue }) => {
     try {
-      // Assuming PATCH /cards/:cardID can update position if targetListID is not changed
-      // Or use the existing move endpoint if it handles same-list moves gracefully.
-      // For now, using the general move endpoint but ensuring targetListId is the current list.
       const response = await apiClient.put(`/cards/${cardId}`, { position: newPosition });
-      // The backend's PUT /cards/:cardID should handle reordering within its list.
-      // It might need more info, or the backend needs to be smart.
-      // A better backend endpoint might be PATCH /lists/:listId/cards/reorder { cardOrders: [{cardId, newPosition}]}
-      // For now, this is a simplified call. The backend needs to handle this specific PUT for position.
-      return { ...response.data.data, originalListId: listId }; // Return updated card
+      return { ...response.data.data, originalListId: listId };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not reorder card');
     }
@@ -195,7 +183,7 @@ export const addCommentToCard = createAsyncThunk(
   async ({ cardId, text }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post(`/cards/${cardId}/comments`, { text });
-      return { cardId, comment: response.data.data }; // Return cardId to find the card in state
+      return { cardId, comment: response.data.data };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not add comment');
     }
@@ -207,24 +195,60 @@ export const deleteCommentFromCard = createAsyncThunk(
   async ({ cardId, commentId }, { rejectWithValue }) => {
     try {
       await apiClient.delete(`/cards/${cardId}/comments/${commentId}`);
-      return { cardId, commentId }; // Return IDs to remove comment from state
+      return { cardId, commentId };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Could not delete comment');
     }
   }
 );
 
+// --- Card Collaborator Thunks ---
+export const fetchCardCollaborators = createAsyncThunk(
+  'boards/fetchCardCollaborators',
+  async (cardId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get(`/cards/${cardId}/collaborators`);
+      return { cardId, collaborators: response.data.data };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Could not fetch collaborators');
+    }
+  }
+);
+
+export const addCardCollaborator = createAsyncThunk(
+  'boards/addCardCollaborator',
+  async ({ cardId, userIdentifier }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post(`/cards/${cardId}/collaborators`, userIdentifier);
+      return { cardId, collaborator: response.data.data };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Could not add collaborator');
+    }
+  }
+);
+
+export const removeCardCollaborator = createAsyncThunk(
+  'boards/removeCardCollaborator',
+  async ({ cardId, userIdToRemove }, { rejectWithValue }) => {
+    try {
+      await apiClient.delete(`/cards/${cardId}/collaborators/${userIdToRemove}`);
+      return { cardId, userIdRemoved: userIdToRemove };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Could not remove collaborator');
+    }
+  }
+);
+
 
 const initialState = {
-  userBoards: [], // List of all boards for the dashboard
+  userBoards: [],
   userBoardsStatus: 'idle',
   userBoardsError: null,
 
-  currentBoard: null, // The board currently being viewed { id, name, lists: [...] }
+  currentBoard: null,
   currentBoardStatus: 'idle',
   currentBoardError: null,
 
-  // Status for list/card operations
   listCardOpStatus: 'idle',
   listCardOpError: null,
 };
@@ -233,7 +257,6 @@ const boardsSlice = createSlice({
   name: 'boards',
   initialState,
   reducers: {
-    // Optimistic updates for card movements
     optimisticallyUpdateCardOrder: (state, action) => {
       const { listId, orderedCards } = action.payload;
       if (state.currentBoard && state.currentBoard.lists) {
@@ -264,7 +287,6 @@ const boardsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // User Boards List
       .addCase(fetchUserBoards.pending, (state) => {
         state.userBoardsStatus = 'loading';
       })
@@ -277,16 +299,14 @@ const boardsSlice = createSlice({
         state.userBoardsError = action.payload;
       })
       .addCase(createNewBoard.fulfilled, (state, action) => {
-        state.userBoards.push(action.payload); // Add to the list
+        state.userBoards.push(action.payload);
       })
       .addCase(updateBoard.fulfilled, (state, action) => {
         const updatedBoard = action.payload;
-        // Update in userBoards list
         const boardIndex = state.userBoards.findIndex(board => board.id === updatedBoard.id);
         if (boardIndex !== -1) {
           state.userBoards[boardIndex] = updatedBoard;
         }
-        // Update if it's the current board
         if (state.currentBoard && state.currentBoard.id === updatedBoard.id) {
           state.currentBoard = { ...state.currentBoard, ...updatedBoard };
         }
@@ -295,29 +315,26 @@ const boardsSlice = createSlice({
         const deletedBoardId = action.payload;
         state.userBoards = state.userBoards.filter(board => board.id !== deletedBoardId);
         if (state.currentBoard && state.currentBoard.id === deletedBoardId) {
-          state.currentBoard = null; // Clear current board if deleted
+          state.currentBoard = null;
         }
       })
-      // Current Board Details
       .addCase(fetchBoardDetails.pending, (state) => {
         state.currentBoardStatus = 'loading';
       })
       .addCase(fetchBoardDetails.fulfilled, (state, action) => {
         state.currentBoardStatus = 'succeeded';
-        // Ensure lists and cards are sorted by position from backend
-        // Create a deep copy of the payload to avoid direct mutation of action.payload
         const boardData = JSON.parse(JSON.stringify(action.payload));
         if (boardData.lists) {
             boardData.lists.forEach(list => {
                 if (list.cards) {
                     list.cards.sort((a, b) => a.position - b.position);
                 } else {
-                    list.cards = []; // Ensure cards array exists
+                    list.cards = [];
                 }
             });
             boardData.lists.sort((a,b) => a.position - b.position);
         } else {
-            boardData.lists = []; // Ensure lists array exists
+            boardData.lists = [];
         }
         state.currentBoard = boardData;
       })
@@ -325,14 +342,13 @@ const boardsSlice = createSlice({
         state.currentBoardStatus = 'failed';
         state.currentBoardError = action.payload;
       })
-      // Add List
       .addCase(addListToBoard.pending, (state) => {
         state.listCardOpStatus = 'loading';
       })
       .addCase(addListToBoard.fulfilled, (state, action) => {
         state.listCardOpStatus = 'succeeded';
         if (state.currentBoard && state.currentBoard.lists) {
-          state.currentBoard.lists.push({...action.payload, cards: []}); // Add new list with empty cards array
+          state.currentBoard.lists.push({...action.payload, cards: []});
         } else if (state.currentBoard) {
             state.currentBoard.lists = [{...action.payload, cards: []}];
         }
@@ -347,10 +363,8 @@ const boardsSlice = createSlice({
         if (state.currentBoard && state.currentBoard.lists) {
           const listIndex = state.currentBoard.lists.findIndex(l => l.id === updatedList.id);
           if (listIndex !== -1) {
-            // Preserve cards if not returned by update payload
             const existingCards = state.currentBoard.lists[listIndex].cards;
             state.currentBoard.lists[listIndex] = { ...updatedList, cards: existingCards || [] };
-            // If position changed, re-sort lists
             state.currentBoard.lists.sort((a, b) => a.position - b.position);
           }
         }
@@ -370,7 +384,6 @@ const boardsSlice = createSlice({
         state.listCardOpStatus = 'failed';
         state.listCardOpError = action.payload;
       })
-      // Add Card
       .addCase(addCardToList.pending, (state) => {
         state.listCardOpStatus = 'loading';
       })
@@ -399,11 +412,9 @@ const boardsSlice = createSlice({
             const cardIndex = state.currentBoard.lists[listIndex].cards.findIndex(c => c.id === updatedCard.id);
             if (cardIndex !== -1) {
               state.currentBoard.lists[listIndex].cards[cardIndex] = updatedCard;
-            } else { // Should not happen if card exists
+            } else {
               state.currentBoard.lists[listIndex].cards.push(updatedCard);
             }
-             // Optional: re-sort if position could have changed, though this thunk isn't for position
-            // state.currentBoard.lists[listIndex].cards.sort((a, b) => a.position - b.position);
           }
         }
       })
@@ -425,49 +436,28 @@ const boardsSlice = createSlice({
         state.listCardOpStatus = 'failed';
         state.listCardOpError = action.payload;
       })
-      // Move Card (covers both reorder within list and move between lists via backend)
-      // After backend confirms, we might refetch or rely on optimistic updates being correct
-      // For simplicity, if backend returns the updated board structure or list, we update it.
-      // Or, we can refetch the board details, but this is less efficient.
-      // The moveCard thunk now returns just the card. The backend should have handled reordering.
-      // We need to manually adjust the state or refetch.
-      // Let's assume after a move, we might want to refetch the board for consistency or handle complex state updates.
-      // For now, optimistic updates are primary, and this `fulfilled` case can be a no-op if optimistic is good,
-      // or it can trigger a refetch of the board.
       .addCase(moveCard.fulfilled, (state, action) => {
         state.listCardOpStatus = 'succeeded';
-        // The optimistic updates should have handled the UI.
-        // If strict consistency is needed, refetch the board:
-        // state.currentBoardStatus = 'idle'; // to trigger refetch on component
-        // Or, more granularly update the specific card and lists if payload is rich enough
         const movedCard = action.payload;
         if (state.currentBoard && state.currentBoard.lists) {
-            // Remove card from any old position (if it was already there due to optimistic)
             state.currentBoard.lists.forEach(list => {
                 list.cards = list.cards.filter(c => c.id !== movedCard.id);
             });
-            // Add card to its new list and position
             const targetList = state.currentBoard.lists.find(l => l.id === movedCard.listID);
             if (targetList) {
                 targetList.cards.push(movedCard);
                 targetList.cards.sort((a, b) => a.position - b.position);
             }
         }
-
       })
       .addCase(moveCard.rejected, (state, action) => {
           state.listCardOpStatus = 'failed';
           state.listCardOpError = action.payload;
-          // Here you might want to revert optimistic updates if they were applied
-          // This requires storing pre-optimistic state, which is complex.
-          // Simplest: notify user and they might need to refresh or try again.
       })
       .addCase(updateCardOrderInList.fulfilled, (state, action) => {
           state.listCardOpStatus = 'succeeded';
-          // Similar to moveCard, optimistic updates are primary.
-          // This ensures the card's position is updated from backend response if different.
           const updatedCard = action.payload;
-          const listId = action.payload.originalListId; // from thunk meta or modified payload
+          const listId = action.payload.originalListId;
            if (state.currentBoard && state.currentBoard.lists) {
             const listIndex = state.currentBoard.lists.findIndex(l => l.id === listId);
             if (listIndex !== -1) {
@@ -475,7 +465,7 @@ const boardsSlice = createSlice({
                 if (cardIndex !== -1) {
                     state.currentBoard.lists[listIndex].cards[cardIndex] = updatedCard;
                 } else {
-                     state.currentBoard.lists[listIndex].cards.push(updatedCard); // If not found, add
+                     state.currentBoard.lists[listIndex].cards.push(updatedCard);
                 }
                 state.currentBoard.lists[listIndex].cards.sort((a, b) => a.position - b.position);
             }
@@ -515,6 +505,73 @@ const boardsSlice = createSlice({
       .addCase(deleteCommentFromCard.rejected, (state, action) => {
         state.listCardOpStatus = 'failed';
         state.listCardOpError = action.payload;
+      })
+      // Card Collaborators
+      .addCase(fetchCardCollaborators.pending, (state) => {
+        state.listCardOpStatus = 'loading';
+      })
+      .addCase(fetchCardCollaborators.fulfilled, (state, action) => {
+        state.listCardOpStatus = 'succeeded';
+        const { cardId, collaborators } = action.payload;
+        if (state.currentBoard && state.currentBoard.lists) {
+          for (const list of state.currentBoard.lists) {
+            const cardIndex = list.cards.findIndex(c => c.id === cardId);
+            if (cardIndex !== -1) {
+              list.cards[cardIndex].collaborators = collaborators;
+              break;
+            }
+          }
+        }
+      })
+      .addCase(fetchCardCollaborators.rejected, (state, action) => {
+        state.listCardOpStatus = 'failed';
+        state.listCardOpError = action.payload;
+      })
+      .addCase(addCardCollaborator.pending, (state) => {
+        state.listCardOpStatus = 'loading';
+      })
+      .addCase(addCardCollaborator.fulfilled, (state, action) => {
+        state.listCardOpStatus = 'succeeded';
+        const { cardId, collaborator } = action.payload;
+        if (state.currentBoard && state.currentBoard.lists) {
+          for (const list of state.currentBoard.lists) {
+            const card = list.cards.find(c => c.id === cardId);
+            if (card) {
+              if (!card.collaborators) {
+                card.collaborators = [];
+              }
+              // Avoid adding if already present by ID
+              if (!card.collaborators.find(c => c.id === collaborator.id)) {
+                card.collaborators.push(collaborator);
+              }
+              break;
+            }
+          }
+        }
+      })
+      .addCase(addCardCollaborator.rejected, (state, action) => {
+        state.listCardOpStatus = 'failed';
+        state.listCardOpError = action.payload;
+      })
+      .addCase(removeCardCollaborator.pending, (state) => {
+        state.listCardOpStatus = 'loading';
+      })
+      .addCase(removeCardCollaborator.fulfilled, (state, action) => {
+        state.listCardOpStatus = 'succeeded';
+        const { cardId, userIdRemoved } = action.payload;
+        if (state.currentBoard && state.currentBoard.lists) {
+          for (const list of state.currentBoard.lists) {
+            const card = list.cards.find(c => c.id === cardId);
+            if (card && card.collaborators) {
+              card.collaborators = card.collaborators.filter(c => c.id !== userIdRemoved);
+              break;
+            }
+          }
+        }
+      })
+      .addCase(removeCardCollaborator.rejected, (state, action) => {
+        state.listCardOpStatus = 'failed';
+        state.listCardOpError = action.payload;
       });
   },
 });
@@ -526,6 +583,8 @@ export const selectUserBoardsStatus = (state) => state.boards.userBoardsStatus;
 export const selectCurrentBoard = (state) => state.boards.currentBoard;
 export const selectCurrentBoardStatus = (state) => state.boards.currentBoardStatus;
 export const selectCurrentBoardError = (state) => state.boards.currentBoardError;
+export const selectListCardOpStatus = (state) => state.boards.listCardOpStatus;
+export const selectListCardOpError = (state) => state.boards.listCardOpError;
 
 
 export default boardsSlice.reducer;

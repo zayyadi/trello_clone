@@ -123,6 +123,7 @@ type CardResponse struct {
 	SupervisorID   *uint             `json:"supervisorID,omitempty"` // New field
 	Supervisor     *UserResponse     `json:"supervisor,omitempty"`   // New field
 	Color          *string           `json:"color,omitempty"`        // New field
+	Collaborators  []UserResponse    `json:"collaborators,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt"`
 	UpdatedAt      time.Time         `json:"updatedAt"`
 }

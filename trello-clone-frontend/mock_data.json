@@ -1,0 +1,59 @@
+{
+  "users": [
+    { "id": 1, "username": "alice_b", "email": "alice@example.com" },
+    { "id": 2, "username": "bob_c", "email": "bob@example.com" },
+    { "id": 3, "username": "charlie_d", "email": "charlie@example.com" },
+    { "id": 4, "username": "david_e", "email": "david@example.com" }
+  ],
+  "boards": [
+    { "id": 101, "name": "Project Phoenix (Frontend)", "description": "Rebuilding the core platform's user interface with Next.js and MUI.", "ownerID": 1 },
+    { "id": 102, "name": "Project Griffin (Backend)", "description": "Developing the robust Go backend API and database schema.", "ownerID": 2 },
+    { "id": 103, "name": "Marketing Campaign Q3", "description": "Planning and execution of Q3 marketing initiatives.", "ownerID": 3 }
+  ],
+  "board_members": [
+    { "boardID": 101, "userID": 2 },
+    { "boardID": 101, "userID": 3 },
+    { "boardID": 102, "userID": 1 },
+    { "boardID": 102, "userID": 3 },
+    { "boardID": 103, "userID": 1 },
+    { "boardID": 103, "userID": 4 }
+  ],
+  "lists": [
+    { "id": 201, "name": "To Do", "boardID": 101, "position": 1 },
+    { "id": 202, "name": "In Progress", "boardID": 101, "position": 2 },
+    { "id": 203, "name": "Done", "boardID": 101, "position": 3 },
+    { "id": 204, "name": "API - Backlog", "boardID": 102, "position": 1 },
+    { "id": 205, "name": "API - Sprint Current", "boardID": 102, "position": 2 },
+    { "id": 206, "name": "API - Completed", "boardID": 102, "position": 3 },
+    { "id": 207, "name": "Campaign Ideas", "boardID": 103, "position": 1 },
+    { "id": 208, "name": "Content Creation", "boardID": 103, "position": 2 }
+  ],
+  "cards": [
+    { "id": 301, "title": "Setup Next.js boilerplate", "description": "Initialize project with create-next-app, configure ESLint, Prettier.", "listID": 201, "position": 1, "dueDate": "2024-08-10T23:59:59Z", "status": "to_do", "assignedUserID": 1, "supervisorID": null, "color": "#FFDDC1" },
+    { "id": 302, "title": "Design login page component", "description": "Create mockups and implement the basic MUI structure for the login form.", "listID": 201, "position": 2, "dueDate": "2024-08-15T23:59:59Z", "status": "to_do", "assignedUserID": 2, "supervisorID": 1, "color": "#ABEBC6" },
+    { "id": 303, "title": "Develop authentication slice", "description": "Redux slice for user authentication, including login and register thunks.", "listID": 202, "position": 1, "dueDate": "2024-08-20T23:59:59Z", "status": "pending", "assignedUserID": 1, "supervisorID": null, "color": null },
+    { "id": 304, "title": "Implement board display grid", "description": "Component to show user boards on the dashboard.", "listID": 202, "position": 2, "dueDate": null, "status": "pending", "assignedUserID": 2, "supervisorID": 1, "color": "#F5B7B1" },
+    { "id": 305, "title": "Finalize UI for board page", "description": "Review and polish the board page, list, and card components.", "listID": 203, "position": 1, "dueDate": "2024-08-05T23:59:59Z", "status": "done", "assignedUserID": 1, "supervisorID": null, "color": null },
+    { "id": 306, "title": "Define User Authentication Endpoints", "description": "Specification for /auth/register and /auth/login.", "listID": 204, "position": 1, "dueDate": "2024-08-12T23:59:59Z", "status": "to_do", "assignedUserID": 2, "supervisorID": null, "color": "#AED6F1" },
+    { "id": 307, "title": "Implement JWT generation", "description": "Use github.com/golang-jwt/jwt for token creation.", "listID": 205, "position": 1, "dueDate": "2024-08-18T23:59:59Z", "status": "pending", "assignedUserID": 1, "supervisorID": 2, "color": null },
+    { "id": 308, "title": "Add Board CRUD operations", "description": "Implement Create, Read, Update, Delete for boards in service and repository.", "listID": 205, "position": 2, "dueDate": "2024-08-25T23:59:59Z", "status": "pending", "assignedUserID": 2, "supervisorID": null, "color": "#D2B4DE" },
+    { "id": 309, "title": "Database schema design for comments", "description": "Finalize fields and relations for comments table.", "listID": 206, "position": 1, "dueDate": "2024-08-01T23:59:59Z", "status": "done", "assignedUserID": 1, "supervisorID": null, "color": null },
+    { "id": 310, "title": "Brainstorm Q3 slogans", "description": "Generate 10-15 potential slogans for the new product launch.", "listID": 207, "position": 1, "dueDate": "2024-07-20T23:59:59Z", "status": "to_do", "assignedUserID": 3, "supervisorID": null, "color": "#FAD7A0" },
+    { "id": 311, "title": "Create social media graphics", "description": "Design graphics for Facebook, Instagram, and Twitter campaigns.", "listID": 208, "position": 1, "dueDate": "2024-07-28T23:59:59Z", "status": "pending", "assignedUserID": 4, "supervisorID": 3, "color": null }
+  ],
+  "card_collaborators": [
+    { "cardID": 301, "userID": 2 },
+    { "cardID": 301, "userID": 3 },
+    { "cardID": 302, "userID": 1 },
+    { "cardID": 303, "userID": 2 },
+    { "cardID": 307, "userID": 3 },
+    { "cardID": 308, "userID": 1 },
+    { "cardID": 310, "userID": 4 },
+    { "cardID": 311, "userID": 1 }
+  ],
+  "comments": [
+    {"id": 401, "content": "Let's ensure mobile responsiveness from day 1.", "cardID": 302, "userID": 1, "createdAt": "2024-08-14T10:00:00Z", "updatedAt": "2024-08-14T10:00:00Z"},
+    {"id": 402, "content": "What's the primary color for the CTA buttons?", "cardID": 302, "userID": 3, "createdAt": "2024-08-14T11:20:00Z", "updatedAt": "2024-08-14T11:20:00Z"},
+    {"id": 403, "content": "Consider using HMAC SHA256 for JWT.", "cardID": 307, "userID": 2, "createdAt": "2024-08-17T15:30:00Z", "updatedAt": "2024-08-17T15:30:00Z"}
+  ]
+}

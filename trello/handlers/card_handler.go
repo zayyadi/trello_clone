@@ -188,6 +188,20 @@ func MapCardToResponse(card *models.Card, includeAssignedUser bool) CardResponse
 			}
 		}
 	}
+
+	if card.Collaborators != nil {
+		resp.Collaborators = make([]UserResponse, len(card.Collaborators))
+		for i, collaborator := range card.Collaborators {
+			// MapUserToResponse is already available in this package (from user_handler.go or a shared DTO mapping file)
+			// If it were not, a local mapping or import would be needed.
+			// For this exercise, we assume MapUserToResponse handles *models.User to UserResponse.
+			// card.Collaborators is of type []*models.User, so 'collaborator' in the loop is *models.User.
+			resp.Collaborators[i] = MapUserToResponse(collaborator)
+		}
+	} else {
+		resp.Collaborators = []UserResponse{} // Ensure empty slice instead of null
+	}
+
 	return resp
 }
 

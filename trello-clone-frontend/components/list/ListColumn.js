@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux'; // Added useSelector
 import { Paper, Typography, Box, Button, TextField, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CardItem from '../card/CardItem';
 import { addCardToList, updateList, deleteList } from '../../features/boards/boardsSlice';
+import { selectCurrentUser } from '../../features/auth/authSlice'; // Added
+import { selectCurrentBoard } from '../../features/boards/boardsSlice'; // Added
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 
-export default function ListColumn({ list, cards, boardId, onCardClick }) { // Removed index prop
+export default function ListColumn({ list, cards, boardId, onCardClick }) {
   const dispatch = useDispatch();
+  const currentUser = useSelector(selectCurrentUser);
+  const currentBoard = useSelector(selectCurrentBoard);
+
   const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDescription, setNewCardDescription] = useState('');
 
-  const [anchorEl, setAnchorEl] = useState(null); // For list options menu
+  const [anchorEl, setAnchorEl] = useState(null);
   const [openEditListDialog, setOpenEditListDialog] = useState(false);
   const [editedListName, setEditedListName] = useState(list.name);
   const [openDeleteListConfirm, setOpenDeleteListConfirm] = useState(false);
@@ -34,11 +39,9 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
     }
   };
 
-  // List options menu handlers
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
 
-  // Edit List handlers
   const handleOpenEditListDialog = () => {
     setEditedListName(list.name);
     setOpenEditListDialog(true);
@@ -52,7 +55,6 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
     handleCloseEditListDialog();
   };
 
-  // Delete List handlers
   const handleOpenDeleteListConfirm = () => {
     setOpenDeleteListConfirm(true);
     handleMenuClose();
@@ -70,7 +72,7 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `list-${list.id}` }); // Use list.id as the unique ID for sortable context
+  } = useSortable({ id: `list-${list.id}` });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -80,7 +82,30 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
   };
 
   const { setNodeRef: setDroppableRef } = useDroppable({
-    id: `list-${list.id}`, // Use list.id as the unique ID for droppable context
+    id: `list-${list.id}`,
+  });
+
+  const filteredCards = cards.filter(card => {
+    if (!currentUser || !currentBoard) return false;
+
+    const isBoardOwner = currentUser.id === currentBoard.ownerID;
+    if (isBoardOwner) return true;
+
+    const isAssignee = card.assignedUserID === currentUser.id;
+    if (isAssignee) return true;
+
+    // Ensure card.collaborators is checked for existence before calling .some
+    const isCollaborator = card.collaborators && card.collaborators.some(c => c.id === currentUser.id);
+    if (isCollaborator) return true;
+
+    // If a card has no specific assignee AND no collaborators, any board member can see it.
+    // This was the previous interpretation.
+    // However, the new requirement: "those added to the card can only see it" implies if no one is "added" (assigned/collaborator),
+    // then no one but the owner should see it.
+    // The logic above (isBoardOwner, isAssignee, isCollaborator) already covers this stricter interpretation.
+    // If none of those conditions are met, the card is not visible.
+
+    return false;
   });
 
   return (
@@ -96,7 +121,7 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 'calc(100vh - 150px)', // Adjust based on header/footer height
+        maxHeight: 'calc(100vh - 150px)',
       }}
       {...attributes}
     >
@@ -119,8 +144,8 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
         ref={setDroppableRef}
         sx={{
           flexGrow: 1,
-          minHeight: '50px', // Ensure droppable area is visible
-          overflowY: 'auto', // Enable scrolling for cards
+          minHeight: '50px',
+          overflowY: 'auto',
           '&::-webkit-scrollbar': {
             width: '8px',
           },
@@ -133,8 +158,8 @@ export default function ListColumn({ list, cards, boardId, onCardClick }) { // R
           },
         }}
       >
-        <SortableContext items={cards.map(card => `card-${card.id}`)} strategy={verticalListSortingStrategy}>
-          {cards.map((card) => (
+        <SortableContext items={filteredCards.map(card => `card-${card.id}`)} strategy={verticalListSortingStrategy}>
+          {filteredCards.map((card) => (
             <CardItem key={card.id} card={card} onCardClick={onCardClick} />
           ))}
         </SortableContext>
