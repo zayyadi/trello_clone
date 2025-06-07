@@ -23,16 +23,16 @@ func (r *CardRepository) Create(card *models.Card) error {
 
 func (r *CardRepository) FindByID(id uint) (*models.Card, error) {
 	var card models.Card
-	// Preload AssignedUser and Supervisor
-	err := r.db.Preload("AssignedUser").Preload("Supervisor").First(&card, id).Error
+	// Preload AssignedUser, Supervisor and Collaborators
+	err := r.db.Preload("AssignedUser").Preload("Supervisor").Preload("Collaborators").First(&card, id).Error
 	return &card, err
 }
 
 func (r *CardRepository) FindByListID(listID uint) ([]models.Card, error) {
 	var cards []models.Card
-	// Preload AssignedUser and Supervisor for each card
+	// Preload AssignedUser, Supervisor and Collaborators for each card
 	err := r.db.Where("list_id = ?", listID).Order("position ASC").
-		Preload("AssignedUser").Preload("Supervisor").
+		Preload("AssignedUser").Preload("Supervisor").Preload("Collaborators").
 		Find(&cards).Error
 	return cards, err
 }
@@ -165,4 +165,25 @@ func (r *CardRepository) IsCollaborator(cardID uint, userID uint) (bool, error) 
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// IsUserCollaboratorOrAssignee checks if a user is either directly assigned to the card
+// or is listed as a collaborator.
+func (r *CardRepository) IsUserCollaboratorOrAssignee(cardID uint, userID uint) (bool, error) {
+	var card models.Card
+	// Check if the user is the AssignedUserID
+	// We select only AssignedUserID to make the query lightweight.
+	if err := r.db.Select("assigned_user_id").First(&card, cardID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, gorm.ErrRecordNotFound // Card itself not found
+		}
+		return false, err // Other database error
+	}
+
+	if card.AssignedUserID != nil && *card.AssignedUserID == userID {
+		return true, nil // User is the assignee
+	}
+
+	// If not the assignee, check if the user is a collaborator
+	return r.IsCollaborator(cardID, userID)
 }

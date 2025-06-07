@@ -10,12 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AddCollaboratorRequest defines the request body for adding a collaborator.
-type AddCollaboratorRequest struct {
-	Email  *string `json:"email"`
-	UserID *uint   `json:"userID"`
-}
-
 type CardHandler struct {
 	cardService services.CardServiceInterface // Use interface
 }
@@ -194,6 +188,20 @@ func MapCardToResponse(card *models.Card, includeAssignedUser bool) CardResponse
 			}
 		}
 	}
+
+	if card.Collaborators != nil {
+		resp.Collaborators = make([]UserResponse, len(card.Collaborators))
+		for i, collaborator := range card.Collaborators {
+			// MapUserToResponse is already available in this package (from user_handler.go or a shared DTO mapping file)
+			// If it were not, a local mapping or import would be needed.
+			// For this exercise, we assume MapUserToResponse handles *models.User to UserResponse.
+			// card.Collaborators is of type []*models.User, so 'collaborator' in the loop is *models.User.
+			resp.Collaborators[i] = MapUserToResponse(collaborator)
+		}
+	} else {
+		resp.Collaborators = []UserResponse{} // Ensure empty slice instead of null
+	}
+
 	return resp
 }
 
@@ -212,7 +220,7 @@ func (h *CardHandler) AddCollaborator(c *gin.Context) {
 		return
 	}
 
-	var req AddCollaboratorRequest
+	var req CardAddCollaboratorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request body: "+err.Error())
 		return

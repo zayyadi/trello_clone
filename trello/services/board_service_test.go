@@ -137,7 +137,7 @@ var _ repositories.BoardMemberRepositoryInterface = (*MockBoardMemberRepository)
 
 // MockUserRepositoryForBoardService is a mock implementation of UserRepositoryInterface for BoardService tests
 type MockUserRepositoryForBoardService struct {
-	CreateFunc      func(user *models.User) error // Likely not used by BoardService directly
+	CreateFunc      func(user *models.User) error
 	FindByEmailFunc func(email string) (*models.User, error)
 	FindByIDFunc    func(id uint) (*models.User, error)
 
@@ -171,10 +171,9 @@ func (m *MockUserRepositoryForBoardService) FindByID(id uint) (*models.User, err
 
 var _ repositories.UserRepositoryInterface = (*MockUserRepositoryForBoardService)(nil)
 
-// Placeholder for actual tests
 func TestBoardService_CreateBoard_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
-	mockUserRepo := &MockUserRepositoryForBoardService{} // Not directly used by CreateBoard logic itself but needed for service init
+	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
 
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
@@ -183,33 +182,30 @@ func TestBoardService_CreateBoard_Success(t *testing.T) {
 	boardName := "Test Board"
 	boardDescription := "Test Description"
 
-	// Configure mock responses
 	mockBoardRepo.CreateFunc = func(board *models.Board) error {
 		assert.Equal(t, boardName, board.Name)
 		assert.Equal(t, boardDescription, board.Description)
 		assert.Equal(t, ownerID, board.OwnerID)
-		board.ID = 100 // Simulate DB assigning an ID
+		board.ID = 100
 		return nil
 	}
 
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
-		assert.Equal(t, uint(100), member.BoardID) // Check if board ID from Create is used
+		assert.Equal(t, uint(100), member.BoardID)
 		assert.Equal(t, ownerID, member.UserID)
-		// BoardMember does not have its own ID field.
 		return nil
 	}
 
-	// FindByID is called at the end of CreateBoard to return the created board
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, uint(100), id)
 		return &models.Board{
-			Model:       gorm.Model{ID: id}, // Correct: Set ID in gorm.Model
+			Model:       gorm.Model{ID: id},
 			Name:        boardName,
 			Description: boardDescription,
 			OwnerID:     ownerID,
-			Owner:       models.User{Model: gorm.Model{ID: ownerID}, ID: ownerID, Username: "owner"}, // Correct: models.User
-			Members: []models.BoardMember{ // Simulate preload
-				{BoardID: id, UserID: ownerID, User: models.User{Model: gorm.Model{ID: ownerID}, ID: ownerID, Username: "owner"}}, // Correct: models.User, no BoardMember.ID
+			Owner:       models.User{Model: gorm.Model{ID: ownerID}, Username: "owner"},
+			Members: []models.BoardMember{
+				{BoardID: id, UserID: ownerID, User: models.User{Model: gorm.Model{ID: ownerID}, Username: "owner"}},
 			},
 		}, nil
 	}
@@ -221,14 +217,13 @@ func TestBoardService_CreateBoard_Success(t *testing.T) {
 	assert.Equal(t, uint(100), createdBoard.ID)
 	assert.Equal(t, boardName, createdBoard.Name)
 	assert.Equal(t, ownerID, createdBoard.OwnerID)
-	assert.Equal(t, ownerID, createdBoard.Owner.ID) // Assert Owner.ID
+	assert.Equal(t, ownerID, createdBoard.Owner.ID)
 	assert.Len(t, createdBoard.Members, 1)
 	if len(createdBoard.Members) > 0 {
 		assert.Equal(t, ownerID, createdBoard.Members[0].UserID)
-		assert.Equal(t, ownerID, createdBoard.Members[0].User.ID) // Assert User.ID within BoardMember
+		assert.Equal(t, ownerID, createdBoard.Members[0].User.ID)
 	}
 
-	// Check that the mock functions were called
 	assert.NotNil(t, mockBoardRepo.CreateCalledWith)
 	assert.NotNil(t, mockBoardMemberRepo.AddMemberCalledWithMember)
 	assert.Equal(t, uint(100), mockBoardRepo.FindByIDCalledWith)
@@ -246,12 +241,10 @@ func TestBoardService_CreateBoard_ErrOnBoardCreate(t *testing.T) {
 	boardDescription := "Test Description"
 	expectedError := errors.New("DB error on board create")
 
-	// Configure mock responses
 	mockBoardRepo.CreateFunc = func(board *models.Board) error {
-		return expectedError // Simulate error
+		return expectedError
 	}
 
-	// AddMemberFunc and FindByIDFunc should not be called
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
 		t.Error("AddMember should not be called if board creation fails")
 		return nil
@@ -267,10 +260,9 @@ func TestBoardService_CreateBoard_ErrOnBoardCreate(t *testing.T) {
 	assert.Equal(t, expectedError, err)
 	assert.Nil(t, createdBoard)
 
-	// Check that Create was called, but others were not
-	assert.NotNil(t, mockBoardRepo.CreateCalledWith)             // Create was attempted
-	assert.Nil(t, mockBoardMemberRepo.AddMemberCalledWithMember) // AddMember was not called
-	assert.Equal(t, uint(0), mockBoardRepo.FindByIDCalledWith)   // FindByID was not called (or called with 0 if default value matters)
+	assert.NotNil(t, mockBoardRepo.CreateCalledWith)
+	assert.Nil(t, mockBoardMemberRepo.AddMemberCalledWithMember)
+	assert.Equal(t, uint(0), mockBoardRepo.FindByIDCalledWith)
 }
 
 func TestBoardService_CreateBoard_ErrOnAddOwnerAsMember(t *testing.T) {
@@ -285,17 +277,15 @@ func TestBoardService_CreateBoard_ErrOnAddOwnerAsMember(t *testing.T) {
 	boardDescription := "Test Description"
 	expectedError := errors.New("DB error on add member")
 
-	// Configure mock responses
 	mockBoardRepo.CreateFunc = func(board *models.Board) error {
-		board.ID = 100 // Simulate DB assigning an ID
+		board.ID = 100
 		return nil
 	}
 
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
-		return expectedError // Simulate error
+		return expectedError
 	}
 
-	// FindByIDFunc should not be called if adding member fails
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		t.Error("FindByID should not be called if AddMember fails")
 		return nil, nil
@@ -307,36 +297,33 @@ func TestBoardService_CreateBoard_ErrOnAddOwnerAsMember(t *testing.T) {
 	assert.Equal(t, expectedError, err)
 	assert.Nil(t, createdBoard)
 
-	// Check that Create and AddMember were called, but FindByID was not
 	assert.NotNil(t, mockBoardRepo.CreateCalledWith)
 	assert.NotNil(t, mockBoardMemberRepo.AddMemberCalledWithMember)
-	assert.Equal(t, uint(0), mockBoardRepo.FindByIDCalledWith) // FindByID was not called
+	assert.Equal(t, uint(0), mockBoardRepo.FindByIDCalledWith)
 }
 
 func TestBoardService_GetBoardByID_SuccessAsOwner(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
-	mockBoardMemberRepo := &MockBoardMemberRepository{} // Not directly used if user is owner
+	mockBoardMemberRepo := &MockBoardMemberRepository{}
 
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // This is the current user ID
+	ownerID := uint(10)
 
 	expectedBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Owned Board",
-		OwnerID: ownerID,                                                  // Current user is the owner
-		Owner:   models.User{Model: gorm.Model{ID: ownerID}, ID: ownerID}, // Correct: models.User
+		OwnerID: ownerID,
+		Owner:   models.User{Model: gorm.Model{ID: ownerID}},
 	}
 
-	// Configure mock responses
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
 		return expectedBoard, nil
 	}
 
-	// IsMember should not be called if user is owner
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if user is owner")
 		return false, nil
@@ -351,8 +338,7 @@ func TestBoardService_GetBoardByID_SuccessAsOwner(t *testing.T) {
 	assert.Equal(t, ownerID, board.OwnerID)
 
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	// Verify IsMember was not called
-	assert.Equal(t, uint(0), mockBoardMemberRepo.IsMemberCalledWithBoardID) // Check default/zero value
+	assert.Equal(t, uint(0), mockBoardMemberRepo.IsMemberCalledWithBoardID)
 }
 
 func TestBoardService_GetBoardByID_SuccessAsMember(t *testing.T) {
@@ -364,16 +350,15 @@ func TestBoardService_GetBoardByID_SuccessAsMember(t *testing.T) {
 
 	boardID := uint(1)
 	boardOwnerID := uint(10)
-	currentUserID := uint(20) // This user is a member, not the owner
+	currentUserID := uint(20)
 
 	expectedBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Member Board",
-		OwnerID: boardOwnerID,                                                       // Current user is not the owner
-		Owner:   models.User{Model: gorm.Model{ID: boardOwnerID}, ID: boardOwnerID}, // Correct: models.User
+		OwnerID: boardOwnerID,
+		Owner:   models.User{Model: gorm.Model{ID: boardOwnerID}},
 	}
 
-	// Configure mock responses
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
 		return expectedBoard, nil
@@ -382,7 +367,7 @@ func TestBoardService_GetBoardByID_SuccessAsMember(t *testing.T) {
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, currentUserID, uID)
-		return true, nil // User is a member
+		return true, nil
 	}
 
 	board, err := boardService.GetBoardByID(boardID, currentUserID)
@@ -406,16 +391,15 @@ func TestBoardService_GetBoardByID_IsMemberError(t *testing.T) {
 
 	boardID := uint(1)
 	boardOwnerID := uint(10)
-	currentUserID := uint(20) // This user is neither owner nor member
+	currentUserID := uint(20)
 	expectedError := errors.New("DB error on IsMember")
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Other's Board",
-		OwnerID: boardOwnerID, // Not currentUserID
+		OwnerID: boardOwnerID,
 	}
 
-	// Configure mock responses
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
 		return foundBoard, nil
@@ -424,15 +408,12 @@ func TestBoardService_GetBoardByID_IsMemberError(t *testing.T) {
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, currentUserID, uID)
-		return false, expectedError // Error checking membership
+		return false, expectedError
 	}
 
 	board, err := boardService.GetBoardByID(boardID, currentUserID)
 
 	assert.Error(t, err)
-	// The service code returns ErrForbidden if IsMember returns an error.
-	// This might be something to refine in the service (e.g., return the actual DB error or a generic server error)
-	// For now, testing current behavior.
 	assert.Equal(t, ErrForbidden, err)
 	assert.Nil(t, board)
 
@@ -456,7 +437,6 @@ func TestBoardService_GetBoardsForUser_Success(t *testing.T) {
 
 	mockBoardRepo.FindByOwnerOrMemberFunc = func(uID uint) ([]models.Board, error) {
 		assert.Equal(t, userID, uID)
-		// Ensure the mock returns boards with their gorm.Model ID set, as the real repo would.
 		return expectedBoards, nil
 	}
 
@@ -465,7 +445,7 @@ func TestBoardService_GetBoardsForUser_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, boards)
 	assert.Len(t, boards, 2)
-	if len(boards) == 2 { // Avoid panic on nil or short slice
+	if len(boards) == 2 {
 		assert.Equal(t, expectedBoards[0].ID, boards[0].ID)
 		assert.Equal(t, expectedBoards[0].Name, boards[0].Name)
 		assert.Equal(t, expectedBoards[1].ID, boards[1].ID)
@@ -482,17 +462,17 @@ func TestBoardService_GetBoardsForUser_NoBoards(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	userID := uint(1)
-	expectedBoards := []models.Board{} // Empty slice
+	expectedBoards := []models.Board{}
 
 	mockBoardRepo.FindByOwnerOrMemberFunc = func(uID uint) ([]models.Board, error) {
 		assert.Equal(t, userID, uID)
-		return expectedBoards, nil // Return empty slice, no error
+		return expectedBoards, nil
 	}
 
 	boards, err := boardService.GetBoardsForUser(userID)
 
 	assert.NoError(t, err)
-	assert.NotNil(t, boards) // Should be an empty slice, not nil
+	assert.NotNil(t, boards)
 	assert.Len(t, boards, 0)
 	assert.Equal(t, userID, mockBoardRepo.FindByOwnerOrMemberCalledWith)
 }
@@ -509,7 +489,7 @@ func TestBoardService_GetBoardsForUser_Error(t *testing.T) {
 
 	mockBoardRepo.FindByOwnerOrMemberFunc = func(uID uint) ([]models.Board, error) {
 		assert.Equal(t, userID, uID)
-		return nil, expectedError // Return error
+		return nil, expectedError
 	}
 
 	boards, err := boardService.GetBoardsForUser(userID)
@@ -528,37 +508,33 @@ func TestBoardService_UpdateBoard_Success(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	currentUserID := uint(10) // Owner
+	currentUserID := uint(10)
 	newName := "Updated Board Name"
 	newDescription := "Updated Description"
 
 	originalBoard := &models.Board{
-		Model:       gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:       gorm.Model{ID: boardID},
 		Name:        "Original Name",
 		Description: "Original Description",
 		OwnerID:     currentUserID,
 	}
 
-	// FindByID (first call)
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		if id == boardID && mockBoardRepo.UpdateCalledWith == nil {
-			// First call, before Update is called
 			return originalBoard, nil
 		} else if id == boardID && mockBoardRepo.UpdateCalledWith != nil {
-			// Second call, after Update is called
 			updatedBoardFromMock := *mockBoardRepo.UpdateCalledWith
-			updatedBoardFromMock.Model.ID = id // Ensure returned mock has ID
+			updatedBoardFromMock.Model.ID = id
 			return &updatedBoardFromMock, nil
 		}
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Update
 	mockBoardRepo.UpdateFunc = func(board *models.Board) error {
 		assert.Equal(t, boardID, board.ID)
 		assert.Equal(t, newName, board.Name)
 		assert.Equal(t, newDescription, board.Description)
-		assert.Equal(t, currentUserID, board.OwnerID) // Ensure OwnerID is not changed
+		assert.Equal(t, currentUserID, board.OwnerID)
 		return nil
 	}
 
@@ -571,8 +547,6 @@ func TestBoardService_UpdateBoard_Success(t *testing.T) {
 	assert.Equal(t, newDescription, updatedBoard.Description)
 
 	assert.NotNil(t, mockBoardRepo.UpdateCalledWith)
-	// FindByIDCalledWith will be boardID due to the sequence of calls, test logic handles this.
-	// Need a better way to track calls if more FindByID are added. For now this is okay.
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
 }
 
@@ -589,10 +563,9 @@ func TestBoardService_UpdateBoard_BoardNotFound(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
-		return nil, gorm.ErrRecordNotFound // Simulate board not found
+		return nil, gorm.ErrRecordNotFound
 	}
 
-	// UpdateFunc should not be called
 	mockBoardRepo.UpdateFunc = func(board *models.Board) error {
 		t.Error("Update should not be called if board not found")
 		return nil
@@ -604,8 +577,8 @@ func TestBoardService_UpdateBoard_BoardNotFound(t *testing.T) {
 	assert.Equal(t, ErrBoardNotFound, err)
 	assert.Nil(t, updatedBoard)
 
-	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith) // First FindByID was called
-	assert.Nil(t, mockBoardRepo.UpdateCalledWith)              // Update was not called
+	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
+	assert.Nil(t, mockBoardRepo.UpdateCalledWith)
 }
 
 func TestBoardService_UpdateBoard_Forbidden(t *testing.T) {
@@ -617,13 +590,13 @@ func TestBoardService_UpdateBoard_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	ownerID := uint(5)
-	currentUserID := uint(10) // Not the owner
+	currentUserID := uint(10)
 	newName := "Updated Name"
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Original Name",
-		OwnerID: ownerID, // Different from currentUserID
+		OwnerID: ownerID,
 	}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
@@ -631,7 +604,6 @@ func TestBoardService_UpdateBoard_Forbidden(t *testing.T) {
 		return foundBoard, nil
 	}
 
-	// UpdateFunc should not be called
 	mockBoardRepo.UpdateFunc = func(board *models.Board) error {
 		t.Error("Update should not be called if user is not owner")
 		return nil
@@ -643,8 +615,8 @@ func TestBoardService_UpdateBoard_Forbidden(t *testing.T) {
 	assert.Equal(t, ErrForbidden, err)
 	assert.Nil(t, updatedBoard)
 
-	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith) // FindByID was called
-	assert.Nil(t, mockBoardRepo.UpdateCalledWith)              // Update was not called
+	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
+	assert.Nil(t, mockBoardRepo.UpdateCalledWith)
 }
 
 func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
@@ -655,12 +627,12 @@ func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	currentUserID := uint(10) // Owner
+	currentUserID := uint(10)
 	newName := "Updated Name"
 	expectedError := errors.New("DB error on update")
 
 	originalBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Original Name",
 		OwnerID: currentUserID,
 	}
@@ -668,10 +640,9 @@ func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
 	var findByIDCallCount = 0
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		findByIDCallCount++
-		if id == boardID && findByIDCallCount == 1 { // First call
+		if id == boardID && findByIDCallCount == 1 {
 			return originalBoard, nil
 		}
-		// Second call to FindByID (after Update) should not happen if Update fails
 		if findByIDCallCount == 2 {
 			t.Error("Second FindByID should not be called if Update fails")
 		}
@@ -679,7 +650,7 @@ func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
 	}
 
 	mockBoardRepo.UpdateFunc = func(board *models.Board) error {
-		return expectedError // Simulate error
+		return expectedError
 	}
 
 	updatedBoard, err := boardService.UpdateBoard(boardID, &newName, nil, currentUserID)
@@ -688,8 +659,8 @@ func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
 	assert.Equal(t, expectedError, err)
 	assert.Nil(t, updatedBoard)
 
-	assert.Equal(t, 1, findByIDCallCount)            // Initial FindByID was called
-	assert.NotNil(t, mockBoardRepo.UpdateCalledWith) // Update was attempted
+	assert.Equal(t, 1, findByIDCallCount)
+	assert.NotNil(t, mockBoardRepo.UpdateCalledWith)
 }
 
 func TestBoardService_UpdateBoard_ErrOnFinalFindByID(t *testing.T) {
@@ -700,12 +671,12 @@ func TestBoardService_UpdateBoard_ErrOnFinalFindByID(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	currentUserID := uint(10) // Owner
+	currentUserID := uint(10)
 	newName := "Updated Board Name"
 	expectedError := errors.New("DB error on final FindByID")
 
 	originalBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Original Name",
 		OwnerID: currentUserID,
 	}
@@ -713,17 +684,16 @@ func TestBoardService_UpdateBoard_ErrOnFinalFindByID(t *testing.T) {
 	var findByIDCallCount = 0
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		findByIDCallCount++
-		if id == boardID && findByIDCallCount == 1 { // First call
+		if id == boardID && findByIDCallCount == 1 {
 			return originalBoard, nil
 		}
-		if id == boardID && findByIDCallCount == 2 { // Second call (after successful update)
-			return nil, expectedError // Error on this call
+		if id == boardID && findByIDCallCount == 2 {
+			return nil, expectedError
 		}
-		return nil, gorm.ErrRecordNotFound // Should not happen in this test flow
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	mockBoardRepo.UpdateFunc = func(board *models.Board) error {
-		// Successful update
 		return nil
 	}
 
@@ -733,7 +703,7 @@ func TestBoardService_UpdateBoard_ErrOnFinalFindByID(t *testing.T) {
 	assert.Equal(t, expectedError, err)
 	assert.Nil(t, updatedBoard)
 
-	assert.Equal(t, 2, findByIDCallCount) // Both FindByID calls were made
+	assert.Equal(t, 2, findByIDCallCount)
 	assert.NotNil(t, mockBoardRepo.UpdateCalledWith)
 }
 
@@ -745,10 +715,10 @@ func TestBoardService_DeleteBoard_Success(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	currentUserID := uint(10) // Owner
+	currentUserID := uint(10)
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Board to Delete",
 		OwnerID: currentUserID,
 	}
@@ -760,7 +730,7 @@ func TestBoardService_DeleteBoard_Success(t *testing.T) {
 
 	mockBoardRepo.DeleteFunc = func(id uint) error {
 		assert.Equal(t, boardID, id)
-		return nil // Successful deletion
+		return nil
 	}
 
 	err := boardService.DeleteBoard(boardID, currentUserID)
@@ -782,10 +752,9 @@ func TestBoardService_DeleteBoard_BoardNotFound(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
-		return nil, gorm.ErrRecordNotFound // Simulate board not found
+		return nil, gorm.ErrRecordNotFound
 	}
 
-	// DeleteFunc should not be called
 	mockBoardRepo.DeleteFunc = func(id uint) error {
 		t.Error("Delete should not be called if board not found")
 		return nil
@@ -796,7 +765,7 @@ func TestBoardService_DeleteBoard_BoardNotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrBoardNotFound, err)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	assert.Equal(t, uint(0), mockBoardRepo.DeleteCalledWith) // Delete was not called
+	assert.Equal(t, uint(0), mockBoardRepo.DeleteCalledWith)
 }
 
 func TestBoardService_DeleteBoard_Forbidden(t *testing.T) {
@@ -808,12 +777,12 @@ func TestBoardService_DeleteBoard_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	ownerID := uint(5)
-	currentUserID := uint(10) // Not the owner
+	currentUserID := uint(10)
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Board to Delete",
-		OwnerID: ownerID, // Different from currentUserID
+		OwnerID: ownerID,
 	}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
@@ -821,7 +790,6 @@ func TestBoardService_DeleteBoard_Forbidden(t *testing.T) {
 		return foundBoard, nil
 	}
 
-	// DeleteFunc should not be called
 	mockBoardRepo.DeleteFunc = func(id uint) error {
 		t.Error("Delete should not be called if user is not owner")
 		return nil
@@ -832,7 +800,7 @@ func TestBoardService_DeleteBoard_Forbidden(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrForbidden, err)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	assert.Equal(t, uint(0), mockBoardRepo.DeleteCalledWith) // Delete was not called
+	assert.Equal(t, uint(0), mockBoardRepo.DeleteCalledWith)
 }
 
 func TestBoardService_DeleteBoard_ErrOnDelete(t *testing.T) {
@@ -843,11 +811,11 @@ func TestBoardService_DeleteBoard_ErrOnDelete(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	currentUserID := uint(10) // Owner
+	currentUserID := uint(10)
 	expectedError := errors.New("DB error on delete")
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Correct: Set ID in gorm.Model
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Board to Delete",
 		OwnerID: currentUserID,
 	}
@@ -859,7 +827,7 @@ func TestBoardService_DeleteBoard_ErrOnDelete(t *testing.T) {
 
 	mockBoardRepo.DeleteFunc = func(id uint) error {
 		assert.Equal(t, boardID, id)
-		return expectedError // Simulate error
+		return expectedError
 	}
 
 	err := boardService.DeleteBoard(boardID, currentUserID)
@@ -867,7 +835,7 @@ func TestBoardService_DeleteBoard_ErrOnDelete(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, expectedError, err)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	assert.Equal(t, boardID, mockBoardRepo.DeleteCalledWith) // Delete was attempted
+	assert.Equal(t, boardID, mockBoardRepo.DeleteCalledWith)
 }
 
 func TestBoardService_DeleteBoard_ErrOnFindByID(t *testing.T) {
@@ -883,7 +851,7 @@ func TestBoardService_DeleteBoard_ErrOnFindByID(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
-		return nil, expectedError // Error on find
+		return nil, expectedError
 	}
 
 	mockBoardRepo.DeleteFunc = func(id uint) error {
@@ -894,7 +862,7 @@ func TestBoardService_DeleteBoard_ErrOnFindByID(t *testing.T) {
 	err := boardService.DeleteBoard(boardID, currentUserID)
 
 	assert.Error(t, err)
-	assert.Equal(t, expectedError, err) // Should be the error from FindByID
+	assert.Equal(t, expectedError, err)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
 	assert.Equal(t, uint(0), mockBoardRepo.DeleteCalledWith)
 }
@@ -907,18 +875,16 @@ func TestBoardService_AddMemberToBoard_SuccessByEmail(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // Current user, owner of the board
+	ownerID := uint(10)
 	targetUserEmail := "newmember@example.com"
 	targetUserID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: targetUserEmail}
-	// BoardMember has no ID field. User field is not a pointer.
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: targetUserEmail}
 	addedMemberWithUser := &models.BoardMember{
 		BoardID: boardID, UserID: targetUserID, User: *userToFind,
 	}
 
-	// Mock setup
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
 		return boardToReturn, nil
@@ -930,12 +896,11 @@ func TestBoardService_AddMemberToBoard_SuccessByEmail(t *testing.T) {
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, targetUserID, uID)
-		return false, nil // Not a member yet
+		return false, nil
 	}
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
 		assert.Equal(t, boardID, member.BoardID)
 		assert.Equal(t, targetUserID, member.UserID)
-		// No ID on BoardMember
 		return nil
 	}
 	mockBoardMemberRepo.FindByBoardIDAndUserIDFunc = func(bID uint, uID uint) (*models.BoardMember, error) {
@@ -950,12 +915,11 @@ func TestBoardService_AddMemberToBoard_SuccessByEmail(t *testing.T) {
 	assert.NotNil(t, newMember)
 	assert.Equal(t, boardID, newMember.BoardID)
 	assert.Equal(t, targetUserID, newMember.UserID)
-	assert.Equal(t, targetUserEmail, newMember.User.Email) // User is not a pointer
+	assert.Equal(t, targetUserEmail, newMember.User.Email)
 
-	// Verify calls
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
 	assert.Equal(t, targetUserEmail, mockUserRepo.FindByEmailCalledWith)
-	assert.Equal(t, uint(0), mockUserRepo.FindByIDCalledWith) // FindByID not called
+	assert.Equal(t, uint(0), mockUserRepo.FindByIDCalledWith)
 	assert.Equal(t, boardID, mockBoardMemberRepo.IsMemberCalledWithBoardID)
 	assert.Equal(t, targetUserID, mockBoardMemberRepo.IsMemberCalledWithUserID)
 	assert.NotNil(t, mockBoardMemberRepo.AddMemberCalledWithMember)
@@ -971,16 +935,15 @@ func TestBoardService_AddMemberToBoard_SuccessByUserID(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // Current user, owner of the board
+	ownerID := uint(10)
 	targetUserID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: "foundbyid@example.com"}
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: "foundbyid@example.com"}
 	addedMemberWithUser := &models.BoardMember{
 		BoardID: boardID, UserID: targetUserID, User: *userToFind,
 	}
 
-	// Mock setup
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
@@ -989,10 +952,9 @@ func TestBoardService_AddMemberToBoard_SuccessByUserID(t *testing.T) {
 		return userToFind, nil
 	}
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, nil // Not a member yet
+		return false, nil
 	}
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
-		// No ID on BoardMember
 		return nil
 	}
 	mockBoardMemberRepo.FindByBoardIDAndUserIDFunc = func(bID uint, uID uint) (*models.BoardMember, error) {
@@ -1004,11 +966,10 @@ func TestBoardService_AddMemberToBoard_SuccessByUserID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, newMember)
 	assert.Equal(t, targetUserID, newMember.UserID)
-	assert.Equal(t, targetUserID, newMember.User.ID) // User is not a pointer
+	assert.Equal(t, targetUserID, newMember.User.ID)
 
-	// Verify calls
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	assert.Equal(t, "", mockUserRepo.FindByEmailCalledWith) // FindByEmail not called
+	assert.Equal(t, "", mockUserRepo.FindByEmailCalledWith)
 	assert.Equal(t, targetUserID, mockUserRepo.FindByIDCalledWith)
 	assert.NotNil(t, mockBoardMemberRepo.AddMemberCalledWithMember)
 }
@@ -1024,12 +985,10 @@ func TestBoardService_AddMemberToBoard_BoardNotFound(t *testing.T) {
 	ownerID := uint(10)
 	targetUserEmail := "test@example.com"
 
-	// No need to fully populate boardToReturn as it's not found
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// None of the other repo functions should be called
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) {
 		t.Error("UserRepo.FindByEmail should not be called if board not found")
 		return nil, nil
@@ -1038,7 +997,6 @@ func TestBoardService_AddMemberToBoard_BoardNotFound(t *testing.T) {
 		t.Error("BoardMemberRepo.IsMember should not be called if board not found")
 		return false, nil
 	}
-	// ... and so on for other functions that should not be called.
 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
 
@@ -1057,7 +1015,7 @@ func TestBoardService_AddMemberToBoard_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
-	currentUserID := uint(10) // Not the owner
+	currentUserID := uint(10)
 	targetUserEmail := "test@example.com"
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}
@@ -1065,7 +1023,7 @@ func TestBoardService_AddMemberToBoard_Forbidden(t *testing.T) {
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
-	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { // Should not be called
+	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) {
 		t.Error("UserRepo.FindByEmailFunc should not be called in Forbidden case")
 		return nil, nil
 	}
@@ -1076,7 +1034,7 @@ func TestBoardService_AddMemberToBoard_Forbidden(t *testing.T) {
 	assert.Equal(t, ErrForbidden, err)
 	assert.Nil(t, newMember)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
-	assert.Equal(t, "", mockUserRepo.FindByEmailCalledWith) // User repo not called
+	assert.Equal(t, "", mockUserRepo.FindByEmailCalledWith)
 }
 
 func TestBoardService_AddMemberToBoard_UserToAddNotFoundByEmail(t *testing.T) {
@@ -1097,13 +1055,13 @@ func TestBoardService_AddMemberToBoard_UserToAddNotFoundByEmail(t *testing.T) {
 	}
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) {
 		assert.Equal(t, targetUserEmail, email)
-		return nil, gorm.ErrRecordNotFound // User not found
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrUserNotFound, err) // Ensure this error is defined
+	assert.Equal(t, ErrUserNotFound, err)
 	assert.Nil(t, newMember)
 	assert.Equal(t, targetUserEmail, mockUserRepo.FindByEmailCalledWith)
 }
@@ -1117,7 +1075,7 @@ func TestBoardService_AddMemberToBoard_UserToAddNotFoundByID(t *testing.T) {
 
 	boardID := uint(1)
 	ownerID := uint(10)
-	targetUserID := uint(999) // Non-existent user ID
+	targetUserID := uint(999)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
@@ -1126,7 +1084,7 @@ func TestBoardService_AddMemberToBoard_UserToAddNotFoundByID(t *testing.T) {
 	}
 	mockUserRepo.FindByIDFunc = func(id uint) (*models.User, error) {
 		assert.Equal(t, targetUserID, id)
-		return nil, gorm.ErrRecordNotFound // User not found
+		return nil, gorm.ErrRecordNotFound
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, nil, &targetUserID, ownerID)
@@ -1150,17 +1108,16 @@ func TestBoardService_AddMemberToBoard_UserAlreadyMember(t *testing.T) {
 	targetUserID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: targetUserEmail}
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: targetUserEmail}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { return userToFind, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, targetUserID, uID)
-		return true, nil // User IS already a member
+		return true, nil
 	}
 
-	// AddMember and FindByBoardIDAndUserID should not be called
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
 		t.Error("AddMember should not be called if user already member")
 		return nil
@@ -1169,7 +1126,7 @@ func TestBoardService_AddMemberToBoard_UserAlreadyMember(t *testing.T) {
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrUserAlreadyMember, err) // Ensure this error is defined
+	assert.Equal(t, ErrUserAlreadyMember, err)
 	assert.Nil(t, newMember)
 	assert.Equal(t, boardID, mockBoardMemberRepo.IsMemberCalledWithBoardID)
 	assert.Equal(t, targetUserID, mockBoardMemberRepo.IsMemberCalledWithUserID)
@@ -1184,16 +1141,15 @@ func TestBoardService_AddMemberToBoard_OwnerCannotBeAddedAsMember(t *testing.T) 
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // This is also the target user
+	ownerID := uint(10)
 	targetUserEmail := "owner@example.com"
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: ownerID}, ID: ownerID, Email: targetUserEmail} // Target user is the owner
+	userToFind := &models.User{Model: gorm.Model{ID: ownerID}, Email: targetUserEmail}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { return userToFind, nil }
 
-	// IsMember and AddMember should not be called if target is owner
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if target is owner")
 		return false, nil
@@ -1206,7 +1162,7 @@ func TestBoardService_AddMemberToBoard_OwnerCannotBeAddedAsMember(t *testing.T) 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrUserAlreadyMember, err) // Or a more specific error like ErrCannotAddOwnerAsMember
+	assert.Equal(t, ErrUserAlreadyMember, err)
 	assert.Nil(t, newMember)
 }
 
@@ -1220,20 +1176,17 @@ func TestBoardService_AddMemberToBoard_InvalidInput(t *testing.T) {
 	boardID := uint(1)
 	ownerID := uint(10)
 
-	// Board FindByID will be called
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
 
-	// Call with nil email and nil userID
 	newMember, err := boardService.AddMemberToBoard(boardID, nil, nil, ownerID)
 
 	assert.Error(t, err)
 	assert.Equal(t, "Either email or userID must be provided", err.Error())
 	assert.Nil(t, newMember)
 
-	// Call with empty email and zero userID
 	emptyEmail := ""
 	zeroID := uint(0)
 	newMember, err = boardService.AddMemberToBoard(boardID, &emptyEmail, &zeroID, ownerID)
@@ -1257,7 +1210,7 @@ func TestBoardService_AddMemberToBoard_ErrOnUserFindByEmail(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) {
-		return nil, expectedError // Error from FindByEmail
+		return nil, expectedError
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
@@ -1283,7 +1236,7 @@ func TestBoardService_AddMemberToBoard_ErrOnUserFindByID(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByIDFunc = func(id uint) (*models.User, error) {
-		return nil, expectedError // Error from FindByID
+		return nil, expectedError
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, nil, &targetUserID, ownerID)
@@ -1307,12 +1260,12 @@ func TestBoardService_AddMemberToBoard_ErrOnIsMember(t *testing.T) {
 	expectedError := errors.New("DB error on IsMember")
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: targetUserEmail}
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: targetUserEmail}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { return userToFind, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, expectedError // Error from IsMember
+		return false, expectedError
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
@@ -1337,15 +1290,14 @@ func TestBoardService_AddMemberToBoard_ErrOnAddMember(t *testing.T) {
 	expectedError := errors.New("DB error on AddMember")
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: targetUserEmail}
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: targetUserEmail}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { return userToFind, nil }
-	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return false, nil } // Not a member
+	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return false, nil }
 	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error {
-		return expectedError // Error from AddMember
+		return expectedError
 	}
-	// FindByBoardIDAndUserID should not be called if AddMember fails
 	mockBoardMemberRepo.FindByBoardIDAndUserIDFunc = func(bID uint, uID uint) (*models.BoardMember, error) {
 		t.Error("FindByBoardIDAndUserID should not be called if AddMember fails")
 		return nil, nil
@@ -1372,14 +1324,14 @@ func TestBoardService_AddMemberToBoard_ErrOnFinalFindByBoardIDAndUserID(t *testi
 	expectedError := errors.New("DB error on FindByBoardIDAndUserID")
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
-	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, ID: targetUserID, Email: targetUserEmail}
+	userToFind := &models.User{Model: gorm.Model{ID: targetUserID}, Email: targetUserEmail}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockUserRepo.FindByEmailFunc = func(email string) (*models.User, error) { return userToFind, nil }
-	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return false, nil } // Not a member
-	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error { return nil }       // AddMember succeeds
+	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return false, nil }
+	mockBoardMemberRepo.AddMemberFunc = func(member *models.BoardMember) error { return nil }
 	mockBoardMemberRepo.FindByBoardIDAndUserIDFunc = func(bID uint, uID uint) (*models.BoardMember, error) {
-		return nil, expectedError // Error from final FindByBoardIDAndUserID
+		return nil, expectedError
 	}
 
 	newMember, err := boardService.AddMemberToBoard(boardID, &targetUserEmail, nil, ownerID)
@@ -1398,31 +1350,29 @@ func TestBoardService_RemoveMemberFromBoard_Success(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10)          // Current user, owner of the board
-	memberToRemoveID := uint(20) // User to be removed
+	ownerID := uint(10)
+	memberToRemoveID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
-	// Mock setup
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, memberToRemoveID, uID)
-		return true, nil // User is a member
+		return true, nil
 	}
 	mockBoardMemberRepo.RemoveMemberFunc = func(bID uint, uID uint) error {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, memberToRemoveID, uID)
-		return nil // Successful removal
+		return nil
 	}
 
 	err := boardService.RemoveMemberFromBoard(boardID, memberToRemoveID, ownerID)
 
 	assert.NoError(t, err)
 
-	// Verify calls
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
 	assert.Equal(t, boardID, mockBoardMemberRepo.IsMemberCalledWithBoardID)
 	assert.Equal(t, memberToRemoveID, mockBoardMemberRepo.IsMemberCalledWithUserID)
@@ -1441,9 +1391,8 @@ func TestBoardService_RemoveMemberFromBoard_BoardNotFound(t *testing.T) {
 	memberToRemoveID := uint(20)
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
-		return nil, gorm.ErrRecordNotFound // Board not found
+		return nil, gorm.ErrRecordNotFound
 	}
-	// IsMember and RemoveMember should not be called
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if board not found")
 		return false, nil
@@ -1468,7 +1417,7 @@ func TestBoardService_RemoveMemberFromBoard_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
-	currentUserID := uint(10) // Not the owner
+	currentUserID := uint(10)
 	memberToRemoveID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}
@@ -1476,7 +1425,6 @@ func TestBoardService_RemoveMemberFromBoard_Forbidden(t *testing.T) {
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
-	// IsMember and RemoveMember should not be called
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if user is not owner")
 		return false, nil
@@ -1496,14 +1444,13 @@ func TestBoardService_RemoveMemberFromBoard_CannotRemoveOwner(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // Current user and also the member to remove (owner)
+	ownerID := uint(10)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		return boardToReturn, nil
 	}
-	// IsMember and RemoveMember should not be called if trying to remove owner
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called when trying to remove owner")
 		return false, nil
@@ -1512,7 +1459,7 @@ func TestBoardService_RemoveMemberFromBoard_CannotRemoveOwner(t *testing.T) {
 	err := boardService.RemoveMemberFromBoard(boardID, ownerID, ownerID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrCannotRemoveOwner, err) // Ensure this error is defined
+	assert.Equal(t, ErrCannotRemoveOwner, err)
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
 }
 
@@ -1524,15 +1471,14 @@ func TestBoardService_RemoveMemberFromBoard_MemberNotFound(t *testing.T) {
 
 	boardID := uint(1)
 	ownerID := uint(10)
-	memberToRemoveID := uint(20) // Not actually a member
+	memberToRemoveID := uint(20)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, nil // User is NOT a member
+		return false, nil
 	}
-	// RemoveMember should not be called
 	mockBoardMemberRepo.RemoveMemberFunc = func(bID uint, uID uint) error {
 		t.Error("RemoveMember should not be called if user is not a member")
 		return nil
@@ -1541,7 +1487,7 @@ func TestBoardService_RemoveMemberFromBoard_MemberNotFound(t *testing.T) {
 	err := boardService.RemoveMemberFromBoard(boardID, memberToRemoveID, ownerID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrBoardMemberNotFound, err) // Ensure this error is defined
+	assert.Equal(t, ErrBoardMemberNotFound, err)
 	assert.Equal(t, boardID, mockBoardMemberRepo.IsMemberCalledWithBoardID)
 	assert.Equal(t, memberToRemoveID, mockBoardMemberRepo.IsMemberCalledWithUserID)
 }
@@ -1561,7 +1507,7 @@ func TestBoardService_RemoveMemberFromBoard_ErrOnIsMember(t *testing.T) {
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, expectedError // Error from IsMember
+		return false, expectedError
 	}
 	mockBoardMemberRepo.RemoveMemberFunc = func(bID uint, uID uint) error {
 		t.Error("RemoveMember should not be called if IsMember errors")
@@ -1588,9 +1534,9 @@ func TestBoardService_RemoveMemberFromBoard_ErrOnRemoveMember(t *testing.T) {
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
-	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return true, nil } // User is a member
+	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) { return true, nil }
 	mockBoardMemberRepo.RemoveMemberFunc = func(bID uint, uID uint) error {
-		return expectedError // Error from RemoveMember
+		return expectedError
 	}
 
 	err := boardService.RemoveMemberFromBoard(boardID, memberToRemoveID, ownerID)
@@ -1608,16 +1554,15 @@ func TestBoardService_GetBoardMembers_SuccessAsOwner(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // Current user is owner
+	ownerID := uint(10)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 	expectedMembers := []models.BoardMember{
-		{BoardID: boardID, UserID: ownerID, User: models.User{Model: gorm.Model{ID: ownerID}, ID: ownerID}},
-		{BoardID: boardID, UserID: 20, User: models.User{Model: gorm.Model{ID: 20}, ID: 20}},
+		{BoardID: boardID, UserID: ownerID, User: models.User{Model: gorm.Model{ID: ownerID}}},
+		{BoardID: boardID, UserID: 20, User: models.User{Model: gorm.Model{ID: 20}}},
 	}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
-	// IsMember should not be called for owner
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if current user is owner")
 		return false, nil
@@ -1643,19 +1588,19 @@ func TestBoardService_GetBoardMembers_SuccessAsMember(t *testing.T) {
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
-	currentUserID := uint(10) // Current user is a member, not owner
+	currentUserID := uint(10)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}
 	expectedMembers := []models.BoardMember{
-		{BoardID: boardID, UserID: actualOwnerID, User: models.User{Model: gorm.Model{ID: actualOwnerID}, ID: actualOwnerID}},
-		{BoardID: boardID, UserID: currentUserID, User: models.User{Model: gorm.Model{ID: currentUserID}, ID: currentUserID}},
+		{BoardID: boardID, UserID: actualOwnerID, User: models.User{Model: gorm.Model{ID: actualOwnerID}}},
+		{BoardID: boardID, UserID: currentUserID, User: models.User{Model: gorm.Model{ID: currentUserID}}},
 	}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, currentUserID, uID)
-		return true, nil // Current user is a member
+		return true, nil
 	}
 	mockBoardMemberRepo.FindMembersByBoardIDFunc = func(bID uint) ([]models.BoardMember, error) {
 		assert.Equal(t, boardID, bID)
@@ -1682,9 +1627,8 @@ func TestBoardService_GetBoardMembers_BoardNotFound(t *testing.T) {
 	currentUserID := uint(10)
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
-		return nil, gorm.ErrRecordNotFound // Board not found
+		return nil, gorm.ErrRecordNotFound
 	}
-	// IsMember and FindMembersByBoardID should not be called
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if board not found")
 		return false, nil
@@ -1710,7 +1654,7 @@ func TestBoardService_GetBoardMembers_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
-	currentUserID := uint(10) // Not owner, not member
+	currentUserID := uint(10)
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}
 
@@ -1718,9 +1662,8 @@ func TestBoardService_GetBoardMembers_Forbidden(t *testing.T) {
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, currentUserID, uID)
-		return false, nil // Current user is NOT a member
+		return false, nil
 	}
-	// FindMembersByBoardID should not be called
 	mockBoardMemberRepo.FindMembersByBoardIDFunc = func(bID uint) ([]models.BoardMember, error) {
 		t.Error("FindMembersByBoardID should not be called if user is forbidden")
 		return nil, nil
@@ -1741,14 +1684,14 @@ func TestBoardService_GetBoardMembers_ErrOnIsMember(t *testing.T) {
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
-	currentUserID := uint(10) // Not owner
+	currentUserID := uint(10)
 	expectedError := errors.New("DB error on IsMember")
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, expectedError // Error from IsMember
+		return false, expectedError
 	}
 	mockBoardMemberRepo.FindMembersByBoardIDFunc = func(bID uint) ([]models.BoardMember, error) {
 		t.Error("FindMembersByBoardID should not be called if IsMember errors")
@@ -1758,8 +1701,6 @@ func TestBoardService_GetBoardMembers_ErrOnIsMember(t *testing.T) {
 	members, err := boardService.GetBoardMembers(boardID, currentUserID)
 
 	assert.Error(t, err)
-	// Service currently returns ErrForbidden if IsMember fails.
-	// Test this behavior, but it could be refined to return the actual error.
 	assert.Equal(t, ErrForbidden, err)
 	assert.Nil(t, members)
 }
@@ -1771,14 +1712,14 @@ func TestBoardService_GetBoardMembers_ErrOnFindMembersByBoardID(t *testing.T) {
 	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
 
 	boardID := uint(1)
-	ownerID := uint(10) // Current user is owner, so IsMember won't be called
+	ownerID := uint(10)
 	expectedError := errors.New("DB error on FindMembersByBoardID")
 
 	boardToReturn := &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: ownerID}
 
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) { return boardToReturn, nil }
 	mockBoardMemberRepo.FindMembersByBoardIDFunc = func(bID uint) ([]models.BoardMember, error) {
-		return nil, expectedError // Error from FindMembersByBoardID
+		return nil, expectedError
 	}
 
 	members, err := boardService.GetBoardMembers(boardID, ownerID)
@@ -1799,13 +1740,11 @@ func TestBoardService_GetBoardByID_BoardNotFound(t *testing.T) {
 	boardID := uint(1)
 	userID := uint(10)
 
-	// Configure mock responses
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
-		return nil, gorm.ErrRecordNotFound // Simulate board not found
+		return nil, gorm.ErrRecordNotFound
 	}
 
-	// IsMember should not be called if board is not found
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		t.Error("IsMember should not be called if board not found")
 		return false, nil
@@ -1814,7 +1753,7 @@ func TestBoardService_GetBoardByID_BoardNotFound(t *testing.T) {
 	board, err := boardService.GetBoardByID(boardID, userID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrBoardNotFound, err) // Ensure this error is defined and used
+	assert.Equal(t, ErrBoardNotFound, err)
 	assert.Nil(t, board)
 
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)
@@ -1830,15 +1769,14 @@ func TestBoardService_GetBoardByID_Forbidden(t *testing.T) {
 
 	boardID := uint(1)
 	boardOwnerID := uint(10)
-	currentUserID := uint(20) // This user is neither owner nor member
+	currentUserID := uint(20)
 
 	foundBoard := &models.Board{
-		Model:   gorm.Model{ID: boardID}, // Corrected
+		Model:   gorm.Model{ID: boardID},
 		Name:    "Other's Board",
-		OwnerID: boardOwnerID, // Not currentUserID
+		OwnerID: boardOwnerID,
 	}
 
-	// Configure mock responses
 	mockBoardRepo.FindByIDFunc = func(id uint) (*models.Board, error) {
 		assert.Equal(t, boardID, id)
 		return foundBoard, nil
@@ -1847,13 +1785,13 @@ func TestBoardService_GetBoardByID_Forbidden(t *testing.T) {
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, currentUserID, uID)
-		return false, nil // User is NOT a member
+		return false, nil
 	}
 
 	board, err := boardService.GetBoardByID(boardID, currentUserID)
 
 	assert.Error(t, err)
-	assert.Equal(t, ErrForbidden, err) // Ensure this error is defined and used
+	assert.Equal(t, ErrForbidden, err)
 	assert.Nil(t, board)
 
 	assert.Equal(t, boardID, mockBoardRepo.FindByIDCalledWith)

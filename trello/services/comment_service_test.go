@@ -44,9 +44,10 @@ var _ repositories.CommentRepositoryInterface = (*MockCommentRepository)(nil)
 
 // --- MockCardRepositoryForCommentService ---
 type MockCardRepositoryForCommentService struct {
-	repositories.CardRepositoryInterface // Embed for unmocked methods
+	repositories.CardRepositoryInterface
 	GetListIDByCardIDFunc                func(cardID uint) (uint, error)
-	FindByIDFunc                         func(id uint) (*models.Card, error) // Added for completeness, though not directly used by CommentService
+	FindByIDFunc                         func(id uint) (*models.Card, error)
+	IsUserCollaboratorOrAssigneeFunc func(cardID uint, userID uint) (bool, error) // Added
 }
 
 func (m *MockCardRepositoryForCommentService) GetListIDByCardID(cardID uint) (uint, error) {
@@ -61,8 +62,14 @@ func (m *MockCardRepositoryForCommentService) FindByID(id uint) (*models.Card, e
 	}
 	return nil, errors.New("FindByIDFunc not implemented for MockCardRepositoryForCommentService")
 }
+func (m *MockCardRepositoryForCommentService) IsUserCollaboratorOrAssignee(cardID uint, userID uint) (bool, error) {
+	if m.IsUserCollaboratorOrAssigneeFunc != nil {
+		return m.IsUserCollaboratorOrAssigneeFunc(cardID, userID)
+	}
+	return false, errors.New("IsUserCollaboratorOrAssigneeFunc not implemented")
+}
 
-// Implement other CardRepositoryInterface methods if used by CommentService, or rely on embedding.
+
 func (m *MockCardRepositoryForCommentService) Create(card *models.Card) error {
 	return errors.New("not implemented")
 }
@@ -88,9 +95,23 @@ func (m *MockCardRepositoryForCommentService) ShiftPositions(listID uint, startP
 	return errors.New("not implemented")
 }
 
+func (m *MockCardRepositoryForCommentService) AddCollaborator(cardID uint, userID uint) error {
+	return errors.New("not implemented")
+}
+func (m *MockCardRepositoryForCommentService) RemoveCollaborator(cardID uint, userID uint) error {
+	return errors.New("not implemented")
+}
+func (m *MockCardRepositoryForCommentService) GetCollaboratorsByCardID(cardID uint) ([]models.User, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *MockCardRepositoryForCommentService) IsCollaborator(cardID uint, userID uint) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+
 // --- MockListRepositoryForCommentService ---
 type MockListRepositoryForCommentService struct {
-	repositories.ListRepositoryInterface // Embed
+	repositories.ListRepositoryInterface
 	GetBoardIDByListIDFunc               func(listID uint) (uint, error)
 }
 
@@ -119,6 +140,8 @@ func (m *MockListRepositoryForCommentService) GetMaxPosition(boardID uint) (uint
 	return 0, errors.New("not implemented")
 }
 func (m *MockListRepositoryForCommentService) GetDB() *gorm.DB { return nil }
+func (m *MockListRepositoryForCommentService) PerformTransaction(fn func(tx *gorm.DB) error) error { return errors.New("not implemented") }
+
 
 // --- MockBoardRepositoryForCommentService ---
 type MockBoardRepositoryForCommentService struct {
@@ -173,7 +196,6 @@ func (m *MockBoardMemberRepositoryForCommentService) FindByBoardIDAndUserID(boar
 	return nil, errors.New("not implemented")
 }
 
-// Placeholder for tests
 func TestCommentService_CreateComment_Success(t *testing.T) {
 	mockCommentRepo := &MockCommentRepository{}
 	mockCardRepo := &MockCardRepositoryForCommentService{}
@@ -191,7 +213,6 @@ func TestCommentService_CreateComment_Success(t *testing.T) {
 	listID := uint(4)
 	content := "This is a test comment"
 
-	// Setup mocks for successful access check
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) {
 		assert.Equal(t, cardID, cID)
 		return listID, nil
@@ -202,24 +223,20 @@ func TestCommentService_CreateComment_Success(t *testing.T) {
 	}
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
 		assert.Equal(t, boardID, bID)
-		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil // User is owner
+		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil
 	}
-	// IsMember not called as user is owner
 
-	// Mock for CommentRepo Create
 	var createdCommentID uint = 100
 	mockCommentRepo.CreateFunc = func(comment *models.Comment) error {
 		assert.Equal(t, content, comment.Content)
 		assert.Equal(t, cardID, comment.CardID)
 		assert.Equal(t, userID, comment.UserID)
-		comment.ID = createdCommentID // Simulate DB assigning ID
+		comment.ID = createdCommentID
 		comment.CreatedAt = time.Now()
 		comment.UpdatedAt = time.Now()
-		// User field won't be populated by Create, but by the subsequent FindByID
 		return nil
 	}
 
-	// Mock for CommentRepo FindByID (to preload user)
 	mockCommentRepo.FindByIDFunc = func(id uint) (*models.Comment, error) {
 		assert.Equal(t, createdCommentID, id)
 		return &models.Comment{
@@ -227,7 +244,7 @@ func TestCommentService_CreateComment_Success(t *testing.T) {
 			Content: content,
 			CardID:  cardID,
 			UserID:  userID,
-			User:    models.User{Model: gorm.Model{ID: userID}, ID: userID, Username: "testuser"}, // Preloaded user
+			User:    models.User{Model: gorm.Model{ID: userID}, Username: "testuser"},
 		}, nil
 	}
 
@@ -250,7 +267,7 @@ func TestCommentService_CreateComment_Success(t *testing.T) {
 }
 
 func TestCommentService_CreateComment_ContentEmpty(t *testing.T) {
-	mockCommentRepo := &MockCommentRepository{} // Not called
+	mockCommentRepo := &MockCommentRepository{}
 	mockCardRepo := &MockCardRepositoryForCommentService{}
 	mockListRepo := &MockListRepositoryForCommentService{}
 	mockBoardRepo := &MockBoardRepositoryForCommentService{}
@@ -265,14 +282,13 @@ func TestCommentService_CreateComment_ContentEmpty(t *testing.T) {
 	boardID := uint(3)
 	listID := uint(4)
 
-	// Setup mocks for successful access check (needed before content check)
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
 		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil
 	}
 
-	comment, err := commentService.CreateComment(cardID, userID, "") // Empty content
+	comment, err := commentService.CreateComment(cardID, userID, "")
 
 	assert.Error(t, err)
 	assert.Equal(t, "comment content cannot be empty", err.Error())
@@ -280,11 +296,11 @@ func TestCommentService_CreateComment_ContentEmpty(t *testing.T) {
 }
 
 func TestCommentService_CreateComment_CardNotFound(t *testing.T) {
-	mockCommentRepo := &MockCommentRepository{} // Not called
+	mockCommentRepo := &MockCommentRepository{}
 	mockCardRepo := &MockCardRepositoryForCommentService{}
-	mockListRepo := &MockListRepositoryForCommentService{}               // Not called
-	mockBoardRepo := &MockBoardRepositoryForCommentService{}             // Not called
-	mockBoardMemberRepo := &MockBoardMemberRepositoryForCommentService{} // Not called
+	mockListRepo := &MockListRepositoryForCommentService{}
+	mockBoardRepo := &MockBoardRepositoryForCommentService{}
+	mockBoardMemberRepo := &MockBoardMemberRepositoryForCommentService{}
 
 	commentService := NewCommentService(
 		mockCommentRepo, mockCardRepo, mockListRepo, mockBoardRepo, mockBoardMemberRepo,
@@ -294,10 +310,9 @@ func TestCommentService_CreateComment_CardNotFound(t *testing.T) {
 	userID := uint(2)
 	content := "Test comment"
 
-	// Mock for checkCardBoardAccess (card not found)
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) {
 		assert.Equal(t, cardID, cID)
-		return 0, gorm.ErrRecordNotFound // Card not found
+		return 0, gorm.ErrRecordNotFound
 	}
 
 	comment, err := commentService.CreateComment(cardID, userID, content)
@@ -308,7 +323,7 @@ func TestCommentService_CreateComment_CardNotFound(t *testing.T) {
 }
 
 func TestCommentService_CreateComment_PermissionDenied_Forbidden(t *testing.T) {
-	mockCommentRepo := &MockCommentRepository{} // Not called
+	mockCommentRepo := &MockCommentRepository{}
 	mockCardRepo := &MockCardRepositoryForCommentService{}
 	mockListRepo := &MockListRepositoryForCommentService{}
 	mockBoardRepo := &MockBoardRepositoryForCommentService{}
@@ -319,22 +334,21 @@ func TestCommentService_CreateComment_PermissionDenied_Forbidden(t *testing.T) {
 	)
 
 	cardID := uint(1)
-	userID := uint(2) // Current user
+	userID := uint(2)
 	boardID := uint(3)
 	listID := uint(4)
-	actualOwnerID := uint(5) // Different from userID
+	actualOwnerID := uint(5)
 	content := "Test comment"
 
-	// Setup mocks for access check leading to forbidden
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
-		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}, nil // Not owner
+		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}, nil
 	}
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
 		assert.Equal(t, boardID, bID)
 		assert.Equal(t, userID, uID)
-		return false, nil // Not a member
+		return false, nil
 	}
 
 	comment, err := commentService.CreateComment(cardID, userID, content)
@@ -361,18 +375,16 @@ func TestCommentService_GetCommentsByCardID_Success(t *testing.T) {
 	listID := uint(4)
 
 	expectedComments := []models.Comment{
-		{Model: gorm.Model{ID: 100}, Content: "First comment", CardID: cardID, UserID: userID, User: models.User{Model: gorm.Model{ID: userID}, ID: userID, Username: "testuser"}},
-		{Model: gorm.Model{ID: 101}, Content: "Second comment", CardID: cardID, UserID: uint(6), User: models.User{Model: gorm.Model{ID: uint(6)}, ID: uint(6), Username: "anotheruser"}},
+		{Model: gorm.Model{ID: 100}, Content: "First comment", CardID: cardID, UserID: userID, User: models.User{Model: gorm.Model{ID: userID}, Username: "testuser"}},
+		{Model: gorm.Model{ID: 101}, Content: "Second comment", CardID: cardID, UserID: uint(6), User: models.User{Model: gorm.Model{ID: uint(6)}, Username: "anotheruser"}},
 	}
 
-	// Setup mocks for successful access check
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
-		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil // User is owner
+		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil
 	}
 
-	// Mock for CommentRepo FindByCardID
 	mockCommentRepo.FindByCardIDFunc = func(cID uint) ([]models.Comment, error) {
 		assert.Equal(t, cardID, cID)
 		return expectedComments, nil
@@ -402,28 +414,26 @@ func TestCommentService_GetCommentsByCardID_NoComments(t *testing.T) {
 	boardID := uint(3)
 	listID := uint(4)
 
-	// Setup mocks for successful access check
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
 		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil
 	}
 
-	// Mock for CommentRepo FindByCardID (returns empty slice)
 	mockCommentRepo.FindByCardIDFunc = func(cID uint) ([]models.Comment, error) {
 		assert.Equal(t, cardID, cID)
-		return []models.Comment{}, nil // No comments
+		return []models.Comment{}, nil
 	}
 
 	comments, err := commentService.GetCommentsByCardID(cardID, userID)
 
 	assert.NoError(t, err)
-	assert.NotNil(t, comments) // Should be an empty slice, not nil
+	assert.NotNil(t, comments)
 	assert.Len(t, comments, 0)
 }
 
 func TestCommentService_GetCommentsByCardID_PermissionDenied_Forbidden(t *testing.T) {
-	mockCommentRepo := &MockCommentRepository{} // Not called
+	mockCommentRepo := &MockCommentRepository{}
 	mockCardRepo := &MockCardRepositoryForCommentService{}
 	mockListRepo := &MockListRepositoryForCommentService{}
 	mockBoardRepo := &MockBoardRepositoryForCommentService{}
@@ -434,22 +444,20 @@ func TestCommentService_GetCommentsByCardID_PermissionDenied_Forbidden(t *testin
 	)
 
 	cardID := uint(1)
-	userID := uint(2) // Current user
+	userID := uint(2)
 	boardID := uint(3)
 	listID := uint(4)
-	actualOwnerID := uint(5) // Different from userID
+	actualOwnerID := uint(5)
 
-	// Setup mocks for access check leading to forbidden
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
-		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}, nil // Not owner
+		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: actualOwnerID}, nil
 	}
 	mockBoardMemberRepo.IsMemberFunc = func(bID uint, uID uint) (bool, error) {
-		return false, nil // Not a member
+		return false, nil
 	}
 
-	// CommentRepo.FindByCardID should not be called
 	var findByCardIDCalled bool
 	mockCommentRepo.FindByCardIDFunc = func(cID uint) ([]models.Comment, error) {
 		findByCardIDCalled = true
@@ -481,14 +489,12 @@ func TestCommentService_GetCommentsByCardID_RepoError(t *testing.T) {
 	listID := uint(4)
 	expectedError := errors.New("DB error on FindByCardID")
 
-	// Setup mocks for successful access check
 	mockCardRepo.GetListIDByCardIDFunc = func(cID uint) (uint, error) { return listID, nil }
 	mockListRepo.GetBoardIDByListIDFunc = func(lID uint) (uint, error) { return boardID, nil }
 	mockBoardRepo.FindByIDFunc = func(bID uint) (*models.Board, error) {
 		return &models.Board{Model: gorm.Model{ID: boardID}, OwnerID: userID}, nil
 	}
 
-	// Mock for CommentRepo FindByCardID (error)
 	mockCommentRepo.FindByCardIDFunc = func(cID uint) ([]models.Comment, error) {
 		return nil, expectedError
 	}

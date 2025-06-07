@@ -59,7 +59,7 @@ func TestAuthService_Register_EmailExists(t *testing.T) {
 	authService := NewAuthService(mockRepo, "test-secret")
 
 	// Configure mock responses
-	existingUser := &models.User{ID: 1, Username: "existinguser", Email: "test@example.com"}
+	existingUser := &models.User{Model: gorm.Model{ID: 1}, Username: "existinguser", Email: "test@example.com"}
 	mockRepo.FindByEmailFunc = func(email string) (*models.User, error) {
 		if email == "test@example.com" {
 			return existingUser, nil // Simulate user found
@@ -229,7 +229,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 	hashedTestPassword, _ := utils.HashPassword(testPassword)
 
 	expectedUser := &models.User{
-		ID:       1,
+		Model:    gorm.Model{ID: 1},
 		Username: "testloginuser",
 		Email:    "login@example.com",
 		Password: hashedTestPassword,
@@ -283,7 +283,7 @@ func TestAuthService_Login_IncorrectPassword(t *testing.T) {
 	hashedCorrectPassword, _ := utils.HashPassword(correctPassword)
 
 	existingUser := &models.User{
-		ID:       1,
+		Model:    gorm.Model{ID: 1},
 		Username: "testloginuser",
 		Email:    "login@example.com",
 		Password: hashedCorrectPassword,
@@ -316,7 +316,7 @@ func TestAuthService_Login_TokenGenerationError(t *testing.T) {
 	hashedTestPassword, _ := utils.HashPassword(testPassword)
 
 	existingUser := &models.User{
-		ID:       1,
+		Model:    gorm.Model{ID: 1},
 		Username: "testloginuser",
 		Email:    "login@example.com",
 		Password: hashedTestPassword,

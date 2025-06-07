@@ -123,6 +123,7 @@ type CardResponse struct {
 	SupervisorID   *uint             `json:"supervisorID,omitempty"` // New field
 	Supervisor     *UserResponse     `json:"supervisor,omitempty"`   // New field
 	Color          *string           `json:"color,omitempty"`        // New field
+	Collaborators  []UserResponse    `json:"collaborators,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt"`
 	UpdatedAt      time.Time         `json:"updatedAt"`
 }
@@ -130,4 +131,10 @@ type CardResponse struct {
 type MoveCardRequest struct {
 	TargetListID uint `json:"targetListID" binding:"required"`
 	NewPosition  uint `json:"newPosition" binding:"required,min=1"` // Min 1 because position is 1-based
+}
+
+// Card Collaborator DTOs
+type CardAddCollaboratorRequest struct {
+	Email  *string `json:"email"`
+	UserID *uint   `json:"userID"`
 }

@@ -19,4 +19,5 @@ var (
 	ErrSameListMove        = errors.New("card is already in the target list; use reorder instead")
 	ErrPositionOutOfBound  = errors.New("position out of bounds")
 	ErrUserNotCollaborator = errors.New("user is not a collaborator on this card")
+	ErrPermissionDenied    = errors.New("user does not have permission for this specific action on the card")
 )
