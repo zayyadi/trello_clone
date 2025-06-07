@@ -131,3 +131,9 @@ type MoveCardRequest struct {
 	TargetListID uint `json:"targetListID" binding:"required"`
 	NewPosition  uint `json:"newPosition" binding:"required,min=1"` // Min 1 because position is 1-based
 }
+
+// Card Collaborator DTOs
+type CardAddCollaboratorRequest struct {
+	Email  *string `json:"email"`
+	UserID *uint   `json:"userID"`
+}

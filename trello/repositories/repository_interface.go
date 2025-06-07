@@ -60,6 +60,7 @@ type CardRepositoryInterface interface {
 	RemoveCollaborator(cardID uint, userID uint) error
 	GetCollaboratorsByCardID(cardID uint) ([]models.User, error)
 	IsCollaborator(cardID uint, userID uint) (bool, error)
+	IsUserCollaboratorOrAssignee(cardID uint, userID uint) (bool, error)
 }
 
 // CommentRepositoryInterface defines the contract for comment repository operations.

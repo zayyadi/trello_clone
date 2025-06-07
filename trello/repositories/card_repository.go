@@ -166,3 +166,24 @@ func (r *CardRepository) IsCollaborator(cardID uint, userID uint) (bool, error) 
 	}
 	return count > 0, nil
 }
+
+// IsUserCollaboratorOrAssignee checks if a user is either directly assigned to the card
+// or is listed as a collaborator.
+func (r *CardRepository) IsUserCollaboratorOrAssignee(cardID uint, userID uint) (bool, error) {
+	var card models.Card
+	// Check if the user is the AssignedUserID
+	// We select only AssignedUserID to make the query lightweight.
+	if err := r.db.Select("assigned_user_id").First(&card, cardID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, gorm.ErrRecordNotFound // Card itself not found
+		}
+		return false, err // Other database error
+	}
+
+	if card.AssignedUserID != nil && *card.AssignedUserID == userID {
+		return true, nil // User is the assignee
+	}
+
+	// If not the assignee, check if the user is a collaborator
+	return r.IsCollaborator(cardID, userID)
+}

@@ -116,9 +116,29 @@ func (s *CardService) CreateCard(listID uint, title, description string, positio
 }
 
 func (s *CardService) GetCardByID(cardID uint, currentUserID uint) (*models.Card, error) {
-	if _, _, err := s.checkAccessViaCard(currentUserID, cardID); err != nil {
+	boardID, _, err := s.checkAccessViaCard(currentUserID, cardID)
+	if err != nil {
 		return nil, err
 	}
+
+	board, err := s.boardRepo.FindByID(boardID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrBoardNotFound
+		}
+		return nil, err
+	}
+
+	isOwner := (board.OwnerID == currentUserID)
+	isCollaboratorOrAssignee, collabErr := s.cardRepo.IsUserCollaboratorOrAssignee(cardID, currentUserID)
+	if collabErr != nil && !errors.Is(collabErr, gorm.ErrRecordNotFound) { // Allow if card not found for IsCollaboratorOrAssignee if it implies no relations
+		return nil, collabErr
+	}
+
+	if !isOwner && !isCollaboratorOrAssignee {
+		return nil, ErrForbidden
+	}
+
 	return s.cardRepo.FindByID(cardID)
 }
 
@@ -140,8 +160,16 @@ func (s *CardService) UpdateCard(
 	color *string, // Add color
 	currentUserID uint,
 ) (*models.Card, error) {
-	_, listID, err := s.checkAccessViaCard(currentUserID, cardID) // Modified to get listID
+	boardID, listID, err := s.checkAccessViaCard(currentUserID, cardID)
 	if err != nil {
+		return nil, err
+	}
+
+	board, err := s.boardRepo.FindByID(boardID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrBoardNotFound
+		}
 		return nil, err
 	}
 
@@ -150,22 +178,46 @@ func (s *CardService) UpdateCard(
 		return nil, ErrCardNotFound
 	}
 
+	isOwner := (board.OwnerID == currentUserID)
+	isCollaboratorOrAssignee, collabErr := s.cardRepo.IsUserCollaboratorOrAssignee(cardID, currentUserID)
+	if collabErr != nil && !errors.Is(collabErr, gorm.ErrRecordNotFound) {
+		return nil, collabErr // Propagate actual DB errors
+	}
+
 	if title != nil {
+		if !isOwner {
+			return nil, ErrPermissionDenied
+		}
 		card.Title = *title
 	}
 	if description != nil {
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		card.Description = *description
 	}
 	if dueDate != nil { // No double pointer, direct update or keep old
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		card.DueDate = dueDate
 	}
 	if assignedUserID != nil {
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		card.AssignedUserID = *assignedUserID
 	}
 	if supervisorID != nil { // New field
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		card.SupervisorID = *supervisorID
 	}
 	if status != nil { // New field
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		// Basic validation for status
 		switch *status {
 		case models.StatusToDo, models.StatusPending, models.StatusDone, models.StatusUndone:
@@ -175,6 +227,9 @@ func (s *CardService) UpdateCard(
 		}
 	}
 	if color != nil { // Add color update
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		if *color == "" { // Allow clearing the color
 			card.Color = nil
 		} else {
@@ -184,6 +239,9 @@ func (s *CardService) UpdateCard(
 
 	// Handle position update within the same list
 	if newPosition != nil && card.Position != *newPosition {
+		if !isOwner && !isCollaboratorOrAssignee {
+			return nil, ErrPermissionDenied
+		}
 		currentPosition := card.Position
 		targetPosition := *newPosition
 
@@ -220,10 +278,23 @@ func (s *CardService) UpdateCard(
 }
 
 func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
-	_, listID, err := s.checkAccessViaCard(currentUserID, cardID)
+	boardID, listID, err := s.checkAccessViaCard(currentUserID, cardID)
 	if err != nil {
 		return err
 	}
+
+	board, err := s.boardRepo.FindByID(boardID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrBoardNotFound
+		}
+		return err
+	}
+
+	if board.OwnerID != currentUserID {
+		return ErrForbidden
+	}
+
 	card, err := s.cardRepo.FindByID(cardID)
 	if err != nil {
 		return ErrCardNotFound
@@ -237,7 +308,7 @@ func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
 			return err
 		}
 		// Delete the card
-		return s.cardRepo.Delete(cardID)
+		return tx.Delete(&models.Card{}, cardID).Error
 	})
 }
 
@@ -271,33 +342,45 @@ func (s *CardService) MoveCard(cardID uint, targetListID uint, newPosition uint,
 
 // AddCollaboratorToCard adds a user as a collaborator to a card.
 func (s *CardService) AddCollaboratorToCard(cardID uint, currentUserID uint, targetUserEmail string, targetUserIDInput *uint) (*models.User, error) {
-	// Authorize current user can access the card (implicitly means they are on the board)
-	if _, _, err := s.checkAccessViaCard(currentUserID, cardID); err != nil {
+	boardID, _, err := s.checkAccessViaCard(currentUserID, cardID)
+	if err != nil {
 		return nil, err
 	}
 
-	var targetUser *models.User
-	var err error
-
-	if targetUserEmail != "" {
-		targetUser, err = s.userRepo.FindByEmail(targetUserEmail)
-	} else if targetUserIDInput != nil {
-		targetUser, err = s.userRepo.FindByID(*targetUserIDInput)
-	} else {
-		return nil, fmt.Errorf("%w: either target user email or ID must be provided", ErrInvalidInput)
-	}
-
+	board, err := s.boardRepo.FindByID(boardID) // Note: This was the line with the error, ensure 'err' is properly assigned.
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
+			return nil, ErrBoardNotFound
 		}
 		return nil, err
 	}
 
+	if board.OwnerID != currentUserID {
+		return nil, ErrForbidden
+	}
+
+	var targetUser *models.User
+	var terr error // Use a different error variable name for this scope
+
+	if targetUserEmail != "" {
+		targetUser, terr = s.userRepo.FindByEmail(targetUserEmail)
+	} else if targetUserIDInput != nil {
+		targetUser, terr = s.userRepo.FindByID(*targetUserIDInput)
+	} else {
+		return nil, fmt.Errorf("%w: either target user email or ID must be provided", ErrInvalidInput)
+	}
+
+	if terr != nil {
+		if errors.Is(terr, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, terr
+	}
+
 	// Check if user is already a collaborator
-	isCollab, err := s.cardRepo.IsCollaborator(cardID, targetUser.ID)
-	if err != nil {
-		return nil, err
+	isCollab, terr := s.cardRepo.IsCollaborator(cardID, targetUser.ID)
+	if terr != nil {
+		return nil, terr
 	}
 	if isCollab {
 		// Optionally, return specific error like ErrAlreadyCollaborator
@@ -305,16 +388,29 @@ func (s *CardService) AddCollaboratorToCard(cardID uint, currentUserID uint, tar
 		return targetUser, nil
 	}
 
-	if err := s.cardRepo.AddCollaborator(cardID, targetUser.ID); err != nil {
-		return nil, err
+	if terr = s.cardRepo.AddCollaborator(cardID, targetUser.ID); terr != nil {
+		return nil, terr
 	}
 	return targetUser, nil
 }
 
 // RemoveCollaboratorFromCard removes a collaborator from a card.
 func (s *CardService) RemoveCollaboratorFromCard(cardID uint, currentUserID uint, targetUserID uint) error {
-	if _, _, err := s.checkAccessViaCard(currentUserID, cardID); err != nil {
+	boardID, _, err := s.checkAccessViaCard(currentUserID, cardID)
+	if err != nil {
 		return err // Ensure current user has access to the card's board
+	}
+
+	board, err := s.boardRepo.FindByID(boardID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrBoardNotFound // Return specific error
+		}
+		return err
+	}
+
+	if board.OwnerID != currentUserID {
+		return ErrForbidden
 	}
 
 	// Check if target user is actually a collaborator

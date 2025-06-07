@@ -10,12 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AddCollaboratorRequest defines the request body for adding a collaborator.
-type AddCollaboratorRequest struct {
-	Email  *string `json:"email"`
-	UserID *uint   `json:"userID"`
-}
-
 type CardHandler struct {
 	cardService services.CardServiceInterface // Use interface
 }
@@ -212,7 +206,7 @@ func (h *CardHandler) AddCollaborator(c *gin.Context) {
 		return
 	}
 
-	var req AddCollaboratorRequest
+	var req CardAddCollaboratorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request body: "+err.Error())
 		return
