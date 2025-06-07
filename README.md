@@ -101,7 +101,7 @@ All `/api/*` routes require JWT authentication via an `Authorization: Bearer <to
 -   **Notifications:** Implement in-app or email notifications for mentions, assignments, due date reminders.
 -   **Activity Logging:** Track user actions (e.g., card creation, moves, comments) for an audit trail.
 -   **Search Functionality:** Implement search across boards, lists, and cards.
--   **Card Details:** Add features like labels/tags, checklists, comments.
+-   **Card Details:** Add features like labels/tags, checklists.
 -   **Soft Deletes & Archiving:** Implement soft deletes for data and an archiving mechanism for boards, lists, and cards.
 -   **Advanced Reordering:** Use more robust reordering algorithms (e.g., fractional indexing) to avoid re-indexing large numbers of items.
 -   **API Versioning.**
