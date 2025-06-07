@@ -35,15 +35,13 @@ const CardDetailModal = ({ open, onClose, card }) => {
   const [assignedUserID, setAssignedUserID] = useState('');
   const [supervisorID, setSupervisorID] = useState('');
   const [collaboratorInput, setCollaboratorInput] = useState('');
+  const [cardColor, setCardColor] = useState('#FFFFFF'); // Added state for card color
 
   const isBoardOwner = currentUser?.id === currentBoard?.ownerID;
-  // Card details (including collaborators) will come from the `card` prop, which is updated by Redux state
   const isCollaborator = card?.collaborators?.some(c => c.id === currentUser?.id);
   const isAssignee = card?.assignedUserID === currentUser?.id;
   const isCollaboratorOrAssignee = isCollaborator || isAssignee;
 
-  // Dummy users for supervisor/assignee select. In a real app, fetch these or get from board members.
-  // For collaborators, we will use the actual collaborator list from the card.
   const boardMembersForSelect = currentBoard?.members?.map(member => member.user) || [];
 
 
@@ -55,10 +53,9 @@ const CardDetailModal = ({ open, onClose, card }) => {
       setStatus(card.status || 'to_do');
       setAssignedUserID(card.assignedUserID ? String(card.assignedUserID) : '');
       setSupervisorID(card.supervisorID ? String(card.supervisorID) : '');
+      setCardColor(card.color || '#FFFFFF'); // Initialize card color
 
-      // Fetch collaborators if card exists and collaborators are not yet fetched/present
-      // (Or if they might have changed, though for simplicity, just fetch if undefined)
-      if (card.id && card.collaborators === undefined) { // Check if undefined to fetch initially
+      if (card.id && card.collaborators === undefined) {
         dispatch(fetchCardCollaborators(card.id));
       }
     }
@@ -75,6 +72,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
       status,
       assignedUserID: assignedUserID ? parseInt(assignedUserID) : null,
       supervisorID: supervisorID ? parseInt(supervisorID) : null,
+      color: cardColor, // Add color to payload
     };
     dispatch(updateCardDetails(payload));
     onClose();
@@ -82,7 +80,6 @@ const CardDetailModal = ({ open, onClose, card }) => {
 
   const handleAddCollaborator = () => {
     if (collaboratorInput.trim() === '') return;
-    // Simple check if input is numeric for ID, otherwise assume email
     const isNumeric = /^\d+$/.test(collaboratorInput);
     let userIdentifier;
     if (isNumeric) {
@@ -99,7 +96,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md"> {/* Changed to md for more space */}
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         Edit Card
         <IconButton aria-label="close" onClick={onClose} sx={{color: (theme) => theme.palette.grey[500]}}>
@@ -107,8 +104,8 @@ const CardDetailModal = ({ open, onClose, card }) => {
         </IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <Grid container spacing={3}> {/* Increased spacing */}
-          <Grid item xs={12} md={8}> {/* Main content area */}
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
             <TextField
               label="Title"
               fullWidth
@@ -130,7 +127,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
               disabled={!isBoardOwner && !isCollaboratorOrAssignee}
             />
           </Grid>
-          <Grid item xs={12} md={4}> {/* Sidebar area for details */}
+          <Grid item xs={12} md={4}>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <DatePicker
                 label="Due Date"
@@ -181,13 +178,31 @@ const CardDetailModal = ({ open, onClose, card }) => {
                 ))}
               </Select>
             </FormControl>
+            {/* Card Color Picker */}
+            <FormControl fullWidth margin="dense" disabled={!isBoardOwner && !isCollaboratorOrAssignee}>
+                <Typography variant="caption" display="block" gutterBottom sx={{ color: !isBoardOwner && !isCollaboratorOrAssignee ? 'text.disabled' : 'text.secondary', mt:1 }}>Card Color</Typography>
+                <TextField
+                    type="color"
+                    value={cardColor}
+                    onChange={(e) => setCardColor(e.target.value)}
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    disabled={!isBoardOwner && !isCollaboratorOrAssignee}
+                    sx={{
+                      '& .MuiInputBase-input': { height: '25px', padding: '5px' }, // Adjust height and padding
+                      '& input[type="color"]::-webkit-color-swatch-wrapper': { padding: 0 },
+                      '& input[type="color"]::-webkit-color-swatch': { border: 'none', borderRadius: '4px' }
+                    }}
+                 />
+            </FormControl>
           </Grid>
 
           {/* Collaborators Section */}
           <Grid item xs={12}>
             <Typography variant="h6" gutterBottom>Collaborators</Typography>
             {listCardOpStatus === 'loading_collaborators' && <CircularProgress size={20} />}
-            {listCardOpError && <Alert severity="error">{listCardOpError}</Alert>}
+            {listCardOpError && listCardOpStatus.endsWith('_collaborators_rejected') && <Alert severity="error">{listCardOpError}</Alert>}
 
             <List dense>
               {card.collaborators && card.collaborators.map(collab => (
@@ -195,7 +210,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
                   key={collab.id}
                   secondaryAction={
                     isBoardOwner && (
-                      <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveCollaborator(collab.id)}>
+                      <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveCollaborator(collab.id)} disabled={listCardOpStatus === 'loading_remove_collaborator'}>
                         <DeleteIcon />
                       </IconButton>
                     )
@@ -204,7 +219,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
                   <ListItemText primary={collab.username} secondary={collab.email} />
                 </ListItem>
               ))}
-              {(!card.collaborators || card.collaborators.length === 0) && listCardOpStatus !== 'loading_collaborators' && (
+              {(!card.collaborators || card.collaborators.length === 0) && !listCardOpStatus.includes('collaborators') && (
                 <Typography variant="body2" color="textSecondary">No collaborators yet.</Typography>
               )}
             </List>
@@ -218,12 +233,15 @@ const CardDetailModal = ({ open, onClose, card }) => {
                   onChange={(e) => setCollaboratorInput(e.target.value)}
                   variant="outlined"
                   sx={{ flexGrow: 1, mr: 1 }}
+                  disabled={listCardOpStatus === 'loading_add_collaborator'}
                 />
                 <Button onClick={handleAddCollaborator} variant="outlined" size="small" disabled={listCardOpStatus === 'loading_add_collaborator'}>
                   {listCardOpStatus === 'loading_add_collaborator' ? <CircularProgress size={20}/> : "Add"}
                 </Button>
               </Box>
             )}
+             {listCardOpStatus === 'loading_add_collaborator_rejected' && listCardOpError && <Alert severity="error" sx={{mt:1}}>{listCardOpError}</Alert>}
+             {listCardOpStatus === 'loading_remove_collaborator_rejected' && listCardOpError && <Alert severity="error" sx={{mt:1}}>{listCardOpError}</Alert>}
           </Grid>
         </Grid>
       </DialogContent>

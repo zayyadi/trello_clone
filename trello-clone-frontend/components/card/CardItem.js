@@ -33,6 +33,8 @@ export default function CardItem({ card, onCardClick }) { // Removed index prop
           boxShadow: 3,
           cursor: 'pointer',
         },
+        // Add borderTop style if card.color is present
+        borderTop: card.color ? `5px solid ${card.color}` : '5px solid transparent',
       }}
       {...attributes}
       {...listeners}
