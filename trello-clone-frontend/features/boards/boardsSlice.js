@@ -576,7 +576,135 @@ const boardsSlice = createSlice({
   },
 });
 
-export const { optimisticallyUpdateCardOrder, optimisticallyMoveCardBetweenLists, clearCurrentBoard } = boardsSlice.actions;
+// New reducers for WebSocket events
+const webSocketReducers = {
+  boardUpdatedByWS: (state, action) => {
+    const updatedBoardData = action.payload;
+    if (state.currentBoard && state.currentBoard.id === updatedBoardData.id) {
+      state.currentBoard.name = updatedBoardData.name;
+      state.currentBoard.description = updatedBoardData.description;
+      // Potentially other board-level fields
+    }
+    // Also update in userBoards list if present
+    const boardIndex = state.userBoards.findIndex(b => b.id === updatedBoardData.id);
+    if (boardIndex !== -1) {
+      state.userBoards[boardIndex] = { ...state.userBoards[boardIndex], ...updatedBoardData };
+    }
+  },
+  boardDeletedByWS: (state, action) => {
+    const { id: deletedBoardId } = action.payload; // payload is {id: boardID}
+    state.userBoards = state.userBoards.filter(board => board.id !== deletedBoardId);
+    if (state.currentBoard && state.currentBoard.id === deletedBoardId) {
+      state.currentBoard = null; // Or redirect, or show a "board deleted" message
+      state.currentBoardStatus = 'idle';
+    }
+  },
+  listCreatedByWS: (state, action) => {
+    const newList = action.payload;
+    if (state.currentBoard && state.currentBoard.id === newList.boardID) {
+      if (!state.currentBoard.lists) state.currentBoard.lists = [];
+      // Check if list already exists to prevent duplicates from optimistic + WS update
+      if (!state.currentBoard.lists.find(l => l.id === newList.id)) {
+        state.currentBoard.lists.push({ ...newList, cards: newList.cards || [] });
+        state.currentBoard.lists.sort((a, b) => a.position - b.position);
+      }
+    }
+  },
+  listUpdatedByWS: (state, action) => {
+    const updatedList = action.payload;
+    if (state.currentBoard && state.currentBoard.id === updatedList.boardID) {
+      const listIndex = state.currentBoard.lists.findIndex(l => l.id === updatedList.id);
+      if (listIndex !== -1) {
+        const existingCards = state.currentBoard.lists[listIndex].cards;
+        state.currentBoard.lists[listIndex] = { ...state.currentBoard.lists[listIndex], ...updatedList, cards: existingCards };
+        state.currentBoard.lists.sort((a, b) => a.position - b.position);
+      }
+    }
+  },
+  listDeletedByWS: (state, action) => {
+    const { id: deletedListId, boardID } = action.payload; // payload is {id: listID, boardID: boardID}
+    if (state.currentBoard && state.currentBoard.id === boardID) {
+      state.currentBoard.lists = state.currentBoard.lists.filter(l => l.id !== deletedListId);
+    }
+  },
+  cardCreatedByWS: (state, action) => {
+    const newCard = action.payload;
+    if (state.currentBoard) {
+      const list = state.currentBoard.lists.find(l => l.id === newCard.listID);
+      if (list) {
+        if (!list.cards) list.cards = [];
+         // Check if card already exists
+        if (!list.cards.find(c => c.id === newCard.id)) {
+          list.cards.push(newCard);
+          list.cards.sort((a, b) => a.position - b.position);
+        }
+      }
+    }
+  },
+  cardUpdatedByWS: (state, action) => {
+    const updatedCard = action.payload;
+    if (state.currentBoard) {
+      const list = state.currentBoard.lists.find(l => l.id === updatedCard.listID);
+      if (list) {
+        const cardIndex = list.cards.findIndex(c => c.id === updatedCard.id);
+        if (cardIndex !== -1) {
+          list.cards[cardIndex] = { ...list.cards[cardIndex], ...updatedCard };
+        } else { // Card might have moved to this list and updated simultaneously
+          list.cards.push(updatedCard);
+          list.cards.sort((a, b) => a.position - b.position);
+        }
+      }
+    }
+  },
+  cardDeletedByWS: (state, action) => {
+    const { id: deletedCardId, listID, boardID } = action.payload; // payload is {id: cardID, listID: listID, boardID: boardID}
+    if (state.currentBoard && state.currentBoard.id === boardID) {
+      const list = state.currentBoard.lists.find(l => l.id === listID);
+      if (list) {
+        list.cards = list.cards.filter(c => c.id !== deletedCardId);
+      }
+    }
+  },
+  cardMovedByWS: (state, action) => {
+    const { cardId, oldListId, newListId, oldPosition, newPosition, boardId, updatedCard } = action.payload; // Assuming payload includes the full updated card for simplicity
+    if (state.currentBoard && state.currentBoard.id === boardId) {
+      // Remove from old list
+      const oldList = state.currentBoard.lists.find(l => l.id === oldListId);
+      if (oldList) {
+        oldList.cards = oldList.cards.filter(c => c.id !== cardId);
+        // oldList.cards.sort((a,b) => a.position - b.position); // Re-sort not strictly needed after removal unless positions are dense
+      }
+      // Add to new list
+      const newList = state.currentBoard.lists.find(l => l.id === newListId);
+      if (newList) {
+        if (!newList.cards.find(c => c.id === cardId)) { // Add if not already there (e.g. from optimistic update)
+             newList.cards.push(updatedCard); // The payload should contain the full card object with its new position and listID
+        } else { // if already there, make sure it's updated
+            const cardIndex = newList.cards.findIndex(c => c.id === cardId);
+            newList.cards[cardIndex] = updatedCard;
+        }
+        newList.cards.sort((a, b) => a.position - b.position);
+      }
+       // Ensure positions are correctly updated for remaining cards in oldList
+      if (oldList && oldListId !== newListId) {
+        oldList.cards.forEach(card => {
+          if (card.position > oldPosition) {
+            // This can be complex as backend should be source of truth for positions.
+            // For now, client relies on backend sending correct positions for all affected cards,
+            // or a separate message for each card whose position changes.
+            // Simplest: rely on the moved card's data and let subsequent updates fix other cards if needed.
+          }
+        });
+      }
+    }
+  },
+  // TODO: Add reducers for BOARD_MEMBER_ADDED, BOARD_MEMBER_REMOVED
+  // TODO: Add reducers for CARD_COLLABORATOR_ADDED, CARD_COLLABORATOR_REMOVED
+  // These would typically update state.currentBoard.members or state.currentBoard.lists[listIndex].cards[cardIndex].collaborators
+};
+
+
+export const { optimisticallyUpdateCardOrder, optimisticallyMoveCardBetweenLists, clearCurrentBoard, ...webSocketActions } = boardsSlice.actions;
 
 export const selectUserBoards = (state) => state.boards.userBoards;
 export const selectUserBoardsStatus = (state) => state.boards.userBoardsStatus;

@@ -17,6 +17,12 @@ type Config struct {
 	DBTimeZone   string
 	JWTSecretKey string
 	ServerPort   string
+
+	// WebSocket specific configurations can be added here in the future
+	// For example:
+	// WebSocketReadBufferSize  int
+	// WebSocketWriteBufferSize int
+	// WebSocketAllowedOrigins  []string
 }
 
 // LoadConfig loads configuration from .env file or environment variables
@@ -35,6 +41,11 @@ func LoadConfig() (*Config, error) {
 		DBTimeZone:   getEnv("DB_TIMEZONE", "UTC"),
 		JWTSecretKey: getEnv("JWT_SECRET_KEY", "defaultsecret"),
 		ServerPort:   getEnv("SERVER_PORT", "8080"),
+
+		// Example of loading WebSocket specific configurations:
+		// WebSocketReadBufferSize:  getEnvAsInt("WEBSOCKET_READ_BUFFER_SIZE", 1024),
+		// WebSocketWriteBufferSize: getEnvAsInt("WEBSOCKET_WRITE_BUFFER_SIZE", 1024),
+		// WebSocketAllowedOrigins:  getEnvAsSlice("WEBSOCKET_ALLOWED_ORIGINS", []string{"*"}),
 	}, nil
 }
 

@@ -1,7 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react'; // Import useRef
 import { useRouter } from 'next/router';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchBoardDetails, addListToBoard, updateList, deleteList, moveCard, updateCardOrderInList, updateCard, deleteCard, addCommentToCard, deleteCommentFromCard, updateBoard, deleteBoard } from '../../features/boards/boardsSlice';
+import {
+  fetchBoardDetails, addListToBoard, updateList, deleteList, moveCard,
+  updateCardOrderInList, updateCard, deleteCard, addCommentToCard,
+  deleteCommentFromCard, updateBoard, deleteBoard, webSocketActions
+} from '../../features/boards/boardsSlice'; // Import webSocketActions
 import { Container, Typography, CircularProgress, Box, Button, TextField, Dialog, DialogActions, DialogContent, DialogTitle, Grid, IconButton, Menu, MenuItem, Paper } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add'; // Import AddIcon
@@ -32,10 +36,140 @@ export default function BoardPage() {
   const [openDeleteBoardConfirm, setOpenDeleteBoardConfirm] = useState(false);
 
   const [mounted, setMounted] = useState(false); // State to track if component is mounted
+  const wsRef = useRef(null); // Ref to hold the WebSocket instance
 
   useEffect(() => {
     setMounted(true); // Set mounted to true after component mounts on client
   }, []);
+
+  // Effect for WebSocket connection
+  useEffect(() => {
+    if (!mounted || !id || !token) { // Ensure component is mounted, boardId and token are available
+      return;
+    }
+
+    // Construct WebSocket URL
+    // TODO: Use wss:// for production and configure the domain/port appropriately
+    const wsHostname = window.location.hostname;
+    // Assuming backend runs on port 8080 during development, adjust if necessary
+    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '8080'; // Allow overriding port via env var
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+    // Use actual hostname for WS connection, not necessarily localhost if accessing remotely
+    const wsUrl = `${wsProtocol}//${wsHostname}:${wsPort}/ws?boardID=${id}&token=${encodeURIComponent(token)}`;
+
+    console.log('Attempting to connect WebSocket to:', wsUrl);
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established for board:', id);
+      // Optionally send a ping or initial message if required by backend
+    };
+
+    ws.onmessage = (event) => {
+      // TODO: Handle incoming messages from the server
+      console.log('WebSocket message received for board:', id, event.data);
+      try {
+        const message = JSON.parse(event.data);
+        console.log('Parsed WebSocket message:', message);
+
+        // Ensure currentBoard.id is a string for comparison if id from router is a string
+        const currentBoardIdStr = currentBoard?.id?.toString();
+        const messageBoardIdStr = message.payload?.boardID?.toString() || message.payload?.boardId?.toString();
+
+
+        // For board-specific messages, ensure it's for the current board
+        // BOARD_DELETED is special, payload is {id: boardID}
+        if (message.type === 'BOARD_DELETED' && message.payload?.id?.toString() === id) {
+           dispatch(webSocketActions.boardDeletedByWS(message.payload));
+           // Consider redirecting or showing a message that the board was deleted
+           router.push('/'); // Example: redirect to home
+           return;
+        }
+
+        // For other messages, check if the message's boardID matches the current board.
+        // Some payloads might have boardID directly, others might be nested (e.g. list.boardID).
+        // The backend should ideally ensure only relevant messages are sent.
+        // Here, we add a basic check if messageBoardIdStr is available and matches.
+        // If messageBoardIdStr is not available in payload, we might assume it's for current board OR refine this check.
+        if (messageBoardIdStr && messageBoardIdStr !== id) {
+            console.log(`WebSocket message for board ${messageBoardIdStr} ignored on board ${id} view.`);
+            return;
+        }
+
+
+        switch (message.type) {
+          case 'BOARD_UPDATED':
+            if (message.payload?.id?.toString() === id) {
+              dispatch(webSocketActions.boardUpdatedByWS(message.payload));
+            }
+            break;
+          case 'LIST_CREATED':
+            // Ensure boardID in payload matches current board if provided, or assume it's for current board
+             if (message.payload?.boardID?.toString() === id) {
+                dispatch(webSocketActions.listCreatedByWS(message.payload));
+             }
+            break;
+          case 'LIST_UPDATED':
+             if (message.payload?.boardID?.toString() === id) {
+                dispatch(webSocketActions.listUpdatedByWS(message.payload));
+             }
+            break;
+          case 'LIST_DELETED':
+            // Payload for LIST_DELETED is {id: listID, boardID: boardID}
+            if (message.payload?.boardID?.toString() === id) {
+                dispatch(webSocketActions.listDeletedByWS(message.payload));
+            }
+            break;
+          case 'CARD_CREATED':
+            // Assuming card payload includes listID, and we can infer boardID or it's in payload
+            // For now, assume it's for the current board if it passed the initial boardID check or if no specific boardID in card payload
+            dispatch(webSocketActions.cardCreatedByWS(message.payload));
+            break;
+          case 'CARD_UPDATED':
+            dispatch(webSocketActions.cardUpdatedByWS(message.payload));
+            break;
+          case 'CARD_DELETED':
+             // Payload for CARD_DELETED is {id: cardID, listID: listID, boardID: boardID}
+            if (message.payload?.boardID?.toString() === id) {
+                dispatch(webSocketActions.cardDeletedByWS(message.payload));
+            }
+            break;
+          case 'CARD_MOVED':
+            // Payload for CARD_MOVED is { cardId, oldListId, newListId, newPosition, boardId, updatedCard }
+            if (message.payload?.boardId?.toString() === id) {
+                dispatch(webSocketActions.cardMovedByWS(message.payload));
+            }
+            break;
+          // TODO: Add cases for BOARD_MEMBER_ADDED, BOARD_MEMBER_REMOVED
+          // TODO: Add cases for CARD_COLLABORATOR_ADDED, CARD_COLLABORATOR_REMOVED
+          default:
+            console.log('Received unhandled WebSocket message type:', message.type);
+        }
+      } catch (error) {
+        console.error('Failed to parse or process WebSocket message:', error, event.data);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error for board:', id, error);
+    };
+
+    ws.onclose = (event) => {
+      console.log('WebSocket connection closed for board:', id, 'Code:', event.code, 'Reason:', event.reason);
+      // Optionally implement reconnection logic here if desired
+    };
+
+    // Cleanup on component unmount or if id/token changes
+    return () => {
+      if (wsRef.current) {
+        console.log('Closing WebSocket connection for board:', id);
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [id, token, mounted, dispatch, currentBoard, router]); // Added dispatch, currentBoard, router to dependencies
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -49,11 +183,11 @@ export default function BoardPage() {
     if (mounted) { // Only run this effect on the client side after mounting
       if (!token) {
         router.push('/login');
-      } else if (id && currentBoardStatus === 'idle') {
+      } else if (id && currentBoardStatus === 'idle' && !currentBoard) { // Fetch only if not already loaded
         dispatch(fetchBoardDetails(id));
       }
     }
-  }, [id, token, router, dispatch, currentBoardStatus, mounted]);
+  }, [id, token, router, dispatch, currentBoardStatus, mounted, currentBoard]); // Added currentBoard to dependencies
 
   const handleOpenCreateListDialog = () => setOpenCreateListDialog(true);
   const handleCloseCreateListDialog = () => {
