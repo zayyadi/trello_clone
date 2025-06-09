@@ -102,7 +102,7 @@ func (s *ListService) CreateList(name string, boardID uint, userID uint, positio
 		userID,
 	)
 
-	return createdList
+	return createdList, nil
 }
 
 func (s *ListService) GetListsByBoardID(boardID uint, userID uint) ([]models.List, error) {
@@ -212,7 +212,7 @@ func (s *ListService) UpdateList(listID uint, name *string, newPosition *uint, u
 		userID,
 	)
 
-	return updatedList
+	return updatedList, nil
 }
 
 func (s *ListService) DeleteList(listID uint, userID uint) error {

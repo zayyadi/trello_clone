@@ -33,16 +33,9 @@ func broadcastMessage(
 	}
 
 	// The hub will handle JSON marshalling of the client-facing parts (Type & Payload)
-	// Send the structured message to the hub's broadcast channel
-	select {
-	case hub.Broadcast <- msg:
-		log.Printf("Message of type %s for board %d queued for broadcast.", messageType, boardID)
-	default:
-		// This case should ideally not be hit if the broadcast channel is buffered
-		// or if the hub is processing messages quickly enough.
-		// If hit, it means the hub's broadcast channel is full, which is a bottleneck.
-		log.Printf("Error: Hub broadcast channel full. Failed to queue message type %s for board %d.", messageType, boardID)
-	}
+	// Send the structured message to the hub via its exported method
+	hub.Submit(msg)
+	log.Printf("Message of type %s for board %d submitted to hub.", messageType, boardID)
 }
 
 // --- Payload Mapping Helpers (moved from individual services for reusability if needed) ---

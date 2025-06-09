@@ -31,6 +31,17 @@ func NewHub() *Hub {
 	}
 }
 
+// Submit queues a message for broadcast by the hub.
+func (h *Hub) Submit(msg *WebSocketMessage) {
+	// This send is blocking if the broadcast channel is full.
+	// The hub's Run method should process messages from this channel quickly.
+	// If the broadcast channel is buffered, it can absorb some burst.
+	// If this becomes a bottleneck (e.g., services submitting faster than hub can process/broadcast),
+	// consider increasing buffer size of h.broadcast or making this Submit non-blocking
+	// with a select-default, though that might mean dropping messages under heavy load.
+	h.broadcast <- msg
+}
+
 // Run starts the hub's event loop.
 func (h *Hub) Run() {
 	for {
