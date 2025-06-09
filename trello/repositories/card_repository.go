@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"log" // Import log package
+
 	"github.com/zayyadi/trello/models"
 	"gorm.io/gorm"
 )
@@ -18,7 +20,11 @@ func (r *CardRepository) Create(card *models.Card) error {
 	var maxPosition uint
 	r.db.Model(&models.Card{}).Where("list_id = ?", card.ListID).Select("COALESCE(MAX(position), 0)").Row().Scan(&maxPosition)
 	card.Position = maxPosition + 1
-	return r.db.Create(card).Error
+	err := r.db.Create(card).Error
+	if err != nil {
+		log.Printf("ERROR [CardRepository.Create]: Failed to create card in DB. Input: %+v, Error: %v\n", card, err)
+	}
+	return err
 }
 
 func (r *CardRepository) FindByID(id uint) (*models.Card, error) {
@@ -38,11 +44,19 @@ func (r *CardRepository) FindByListID(listID uint) ([]models.Card, error) {
 }
 
 func (r *CardRepository) Update(card *models.Card) error {
-	return r.db.Save(card).Error
+	err := r.db.Save(card).Error
+	if err != nil {
+		log.Printf("ERROR [CardRepository.Update]: Failed to update card in DB. Input: %+v, Error: %v\n", card, err)
+	}
+	return err
 }
 
 func (r *CardRepository) Delete(id uint) error {
-	return r.db.Delete(&models.Card{}, id).Error
+	err := r.db.Delete(&models.Card{}, id).Error
+	if err != nil {
+		log.Printf("ERROR [CardRepository.Delete]: Failed to delete card with ID %d. Error: %v\n", id, err)
+	}
+	return err
 }
 
 func (r *CardRepository) GetListIDByCardID(cardID uint) (uint, error) {
@@ -115,32 +129,35 @@ func (r *CardRepository) MoveCard(cardID, oldListID, newListID uint, newPosition
 		cardToMove.ListID = newListID
 		cardToMove.Position = newPosition
 		if err := tx.Save(&cardToMove).Error; err != nil {
+			log.Printf("ERROR [CardRepository.MoveCard.Save]: Failed to save moved card %d. Error: %v\n", cardID, err)
 			return err
 		}
 
 		return nil
 	})
+	// err is implicitly returned by the Transaction func if any step fails
+	// Adding a generic log here if transaction itself fails might be useful too, but GORM handles that.
+	return err // return the error from the transaction
 }
 
 func (r *CardRepository) AddCollaborator(cardID uint, userID uint) error {
 	collaborator := models.CardCollaborator{CardID: cardID, UserID: userID}
-	// Using FirstOrCreate to prevent duplicate entries if the relationship already exists.
-	// If it already exists, it does nothing and returns no error.
-	// If you need to know if it was newly created or already existed, FirstOrCreate is not ideal.
-	// In that case, a check followed by Create would be better.
-	// For adding, ensuring the link exists is usually sufficient.
-	return r.db.FirstOrCreate(&collaborator).Error
+	err := r.db.FirstOrCreate(&collaborator).Error
+	if err != nil {
+		log.Printf("ERROR [CardRepository.AddCollaborator]: Failed to add collaborator UserID %d to CardID %d. Error: %v\n", userID, cardID, err)
+	}
+	return err
 }
 
 func (r *CardRepository) RemoveCollaborator(cardID uint, userID uint) error {
 	collaborator := models.CardCollaborator{CardID: cardID, UserID: userID}
-	// Delete the specific association.
-	// GORM's Delete with a struct containing primary key values will delete that record.
 	result := r.db.Delete(&collaborator)
 	if result.Error != nil {
+		log.Printf("ERROR [CardRepository.RemoveCollaborator]: Failed to remove collaborator UserID %d from CardID %d. Error: %v\n", userID, cardID, result.Error)
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
+		log.Printf("WARN [CardRepository.RemoveCollaborator]: No collaborator found for UserID %d on CardID %d to remove.\n", userID, cardID)
 		return gorm.ErrRecordNotFound // Or a custom "collaborator not found" error
 	}
 	return nil
