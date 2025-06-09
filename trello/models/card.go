@@ -10,10 +10,10 @@ import (
 type CardStatus string
 
 const (
-	StatusToDo    CardStatus = "to_do"
-	StatusPending CardStatus = "pending" // Could be "in_progress"
-	StatusDone    CardStatus = "done"
-	StatusUndone  CardStatus = "undone" // Perhaps a synonym for "to_do" or for reopened tasks
+	StatusToDo    CardStatus = "TO_DO"
+	StatusPending CardStatus = "PENDING"
+	StatusDone    CardStatus = "DONE"
+	StatusUndone  CardStatus = "UNDONE"
 )
 
 // Card model (Task card within a list)
@@ -25,7 +25,7 @@ type Card struct {
 	List           List       `gorm:"foreignKey:ListID" json:"-"`
 	Position       uint       `gorm:"not null;default:0" json:"position"`
 	DueDate        *time.Time `json:"dueDate,omitempty"` // Already exists, ensure it's used
-	Status         CardStatus `gorm:"type:varchar(20);default:'to_do'" json:"status"`
+	Status         CardStatus `gorm:"type:varchar(20);default:'TO_DO'" json:"status"`
 	AssignedUserID *uint      `json:"assignedUserID,omitempty"` // User doing the task
 	AssignedUser   *User      `gorm:"foreignKey:AssignedUserID" json:"assignedUser,omitempty"`
 	SupervisorID   *uint      `json:"supervisorID,omitempty"` // User supervising the task

@@ -102,16 +102,14 @@ export const addListToBoard = createAsyncThunk(
 export const addCardToList = createAsyncThunk(
   'boards/addCardToList',
   async ({ listId, title, description, dueDate, assignedUserID, supervisorID }, { rejectWithValue }) => {
+    const payload = { title, description, dueDate, assignedUserID, supervisorID };
+    console.log('Adding card with payload:', payload);
     try {
-      const response = await apiClient.post(`/lists/${listId}/cards`, { 
-          title, 
-          description,
-          dueDate,
-          assignedUserID,
-          supervisorID
-        });
+      const response = await apiClient.post(`/lists/${listId}/cards`, payload);
+      console.log('Add card response:', response.data);
       return response.data.data;
     } catch (error) {
+      console.error('Add card error:', error.response?.data || error.message);
       return rejectWithValue(error.response?.data?.message || 'Could not add card');
     }
   }
@@ -133,10 +131,13 @@ export const updateCardDetails = createAsyncThunk(
   'boards/updateCardDetails',
   async (cardData, { rejectWithValue }) => {
     const { cardId, ...updatePayload } = cardData;
+    console.log('Updating card with payload:', updatePayload);
     try {
       const response = await apiClient.put(`/cards/${cardId}`, updatePayload);
+      console.log('Update card response:', response.data);
       return response.data.data;
     } catch (error) {
+      console.error('Update card error:', error.response?.data || error.message);
       return rejectWithValue(error.response?.data?.message || 'Could not update card');
     }
   }
@@ -283,7 +284,112 @@ const boardsSlice = createSlice({
         state.currentBoard = null;
         state.currentBoardStatus = 'idle';
         state.currentBoardError = null;
-    }
+    },
+    // Add the WebSocket event reducers here
+    boardUpdatedByWS: (state, action) => {
+      const updatedBoardData = action.payload;
+      if (state.currentBoard && state.currentBoard.id === updatedBoardData.id) {
+        state.currentBoard.name = updatedBoardData.name;
+        state.currentBoard.description = updatedBoardData.description;
+      }
+      const boardIndex = state.userBoards.findIndex(b => b.id === updatedBoardData.id);
+      if (boardIndex !== -1) {
+        state.userBoards[boardIndex] = { ...state.userBoards[boardIndex], ...updatedBoardData };
+      }
+    },
+    boardDeletedByWS: (state, action) => {
+      const { id: deletedBoardId } = action.payload;
+      state.userBoards = state.userBoards.filter(board => board.id !== deletedBoardId);
+      if (state.currentBoard && state.currentBoard.id === deletedBoardId) {
+        state.currentBoard = null;
+        state.currentBoardStatus = 'idle';
+      }
+    },
+    listCreatedByWS: (state, action) => {
+      const newList = action.payload;
+      if (state.currentBoard && state.currentBoard.id === newList.boardID) {
+        if (!state.currentBoard.lists) state.currentBoard.lists = [];
+        if (!state.currentBoard.lists.find(l => l.id === newList.id)) {
+          state.currentBoard.lists.push({ ...newList, cards: newList.cards || [] });
+          state.currentBoard.lists.sort((a, b) => a.position - b.position);
+        }
+      }
+    },
+    listUpdatedByWS: (state, action) => {
+      const updatedList = action.payload;
+      if (state.currentBoard && state.currentBoard.id === updatedList.boardID) {
+        const listIndex = state.currentBoard.lists.findIndex(l => l.id === updatedList.id);
+        if (listIndex !== -1) {
+          const existingCards = state.currentBoard.lists[listIndex].cards;
+          state.currentBoard.lists[listIndex] = { ...state.currentBoard.lists[listIndex], ...updatedList, cards: existingCards || [] };
+          state.currentBoard.lists.sort((a, b) => a.position - b.position);
+        }
+      }
+    },
+    listDeletedByWS: (state, action) => {
+      const { id: deletedListId, boardID } = action.payload;
+      if (state.currentBoard && state.currentBoard.id === boardID) {
+        state.currentBoard.lists = state.currentBoard.lists.filter(l => l.id !== deletedListId);
+      }
+    },
+    cardCreatedByWS: (state, action) => {
+      const newCard = action.payload;
+      if (state.currentBoard) {
+        const list = state.currentBoard.lists.find(l => l.id === newCard.listID);
+        if (list) {
+          if (!list.cards) list.cards = [];
+          if (!list.cards.find(c => c.id === newCard.id)) {
+            list.cards.push(newCard);
+            list.cards.sort((a, b) => a.position - b.position);
+          }
+        }
+      }
+    },
+    cardUpdatedByWS: (state, action) => {
+      const updatedCard = action.payload;
+      if (state.currentBoard) {
+        const list = state.currentBoard.lists.find(l => l.id === updatedCard.listID);
+        if (list) {
+          const cardIndex = list.cards.findIndex(c => c.id === updatedCard.id);
+          if (cardIndex !== -1) {
+            list.cards[cardIndex] = { ...list.cards[cardIndex], ...updatedCard };
+          } else {
+            list.cards.push(updatedCard); // If card moved list and updated
+            list.cards.sort((a, b) => a.position - b.position);
+          }
+        }
+      }
+    },
+    cardDeletedByWS: (state, action) => {
+      const { id: deletedCardId, listID, boardID } = action.payload;
+      if (state.currentBoard && state.currentBoard.id === boardID) {
+        const list = state.currentBoard.lists.find(l => l.id === listID);
+        if (list) {
+          list.cards = list.cards.filter(c => c.id !== deletedCardId);
+        }
+      }
+    },
+    cardMovedByWS: (state, action) => {
+      const { cardId, oldListId, newListId, oldPosition, newPosition, boardId, updatedCard } = action.payload;
+      if (state.currentBoard && state.currentBoard.id === boardId) {
+        const oldList = state.currentBoard.lists.find(l => l.id === oldListId);
+        if (oldList) {
+          oldList.cards = oldList.cards.filter(c => c.id !== cardId);
+        }
+        const newList = state.currentBoard.lists.find(l => l.id === newListId);
+        if (newList) {
+          if (!newList.cards.find(c => c.id === cardId)) {
+            newList.cards.push(updatedCard);
+          } else {
+            const cardIndex = newList.cards.findIndex(c => c.id === cardId);
+            newList.cards[cardIndex] = updatedCard;
+          }
+          newList.cards.sort((a, b) => a.position - b.position);
+        }
+      }
+    },
+    // TODO: BOARD_MEMBER_ADDED, BOARD_MEMBER_REMOVED
+    // TODO: CARD_COLLABORATOR_ADDED, CARD_COLLABORATOR_REMOVED
   },
   extraReducers: (builder) => {
     builder
@@ -704,7 +810,27 @@ const webSocketReducers = {
 };
 
 
-export const { optimisticallyUpdateCardOrder, optimisticallyMoveCardBetweenLists, clearCurrentBoard, ...webSocketActions } = boardsSlice.actions;
+// Correctly export all actions including the new WebSocket ones
+const existingActions = boardsSlice.actions;
+export const {
+    optimisticallyUpdateCardOrder,
+    optimisticallyMoveCardBetweenLists,
+    clearCurrentBoard,
+    boardUpdatedByWS,
+    boardDeletedByWS,
+    listCreatedByWS,
+    listUpdatedByWS,
+    listDeletedByWS,
+    cardCreatedByWS,
+    cardUpdatedByWS,
+    cardDeletedByWS,
+    cardMovedByWS,
+    // Add other WS actions here as they are created
+} = existingActions;
+
+// This re-assignment is for clarity; webSocketActions can be used directly if preferred in components.
+export const webSocketActions = existingActions;
+
 
 export const selectUserBoards = (state) => state.boards.userBoards;
 export const selectUserBoardsStatus = (state) => state.boards.userBoardsStatus;

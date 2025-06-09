@@ -31,7 +31,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(null);
-  const [status, setStatus] = useState('to_do');
+  const [status, setStatus] = useState('TO_DO'); // Default to uppercase
   const [assignedUserID, setAssignedUserID] = useState('');
   const [supervisorID, setSupervisorID] = useState('');
   const [collaboratorInput, setCollaboratorInput] = useState('');
@@ -52,7 +52,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
       setTitle(card.title || '');
       setDescription(card.description || '');
       setDueDate(card.dueDate ? new Date(card.dueDate) : null);
-      setStatus(card.status || 'to_do');
+      setStatus(card.status?.toUpperCase() || 'TO_DO'); // Convert to uppercase on load, default to TO_DO
       setAssignedUserID(card.assignedUserID ? String(card.assignedUserID) : '');
       setSupervisorID(card.supervisorID ? String(card.supervisorID) : '');
 
@@ -148,9 +148,10 @@ const CardDetailModal = ({ open, onClose, card }) => {
                 label="Status"
                 onChange={(e) => setStatus(e.target.value)}
               >
-                <MenuItem value="to_do">To Do</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="done">Done</MenuItem>
+                <MenuItem value="TO_DO">To Do</MenuItem>
+                <MenuItem value="PENDING">Pending</MenuItem>
+                <MenuItem value="DONE">Done</MenuItem>
+                <MenuItem value="UNDONE">Undone</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth margin="dense" disabled={!isBoardOwner && !isCollaboratorOrAssignee}>
