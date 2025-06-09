@@ -132,7 +132,7 @@ func (s *CardService) CreateCard(listID uint, title, description string, positio
 		currentUserID,
 	)
 
-	return createdCard
+	return createdCard, nil
 }
 
 func (s *CardService) GetCardByID(cardID uint, currentUserID uint) (*models.Card, error) {
@@ -326,7 +326,7 @@ func (s *CardService) UpdateCard(
 	}
 
 
-	return updatedCard
+	return updatedCard, nil
 }
 
 func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
@@ -435,7 +435,7 @@ func (s *CardService) MoveCard(cardID uint, targetListID uint, newPosition uint,
 		currentUserID,
 	)
 
-	return movedCard
+	return movedCard, nil
 }
 
 // AddCollaboratorToCard adds a user as a collaborator to a card.
@@ -494,7 +494,7 @@ func (s *CardService) AddCollaboratorToCard(cardID uint, currentUserID uint, tar
 			CardID:   cardID,
 			UserID:   targetUser.ID,
 			BoardID:  boardID,
-			UserName: targetUser.Name, // Assuming User model has Name
+			UserName: targetUser.Username, // Corrected line
 		}
 		broadcastMessage(
 			s.hub,

@@ -77,7 +77,7 @@ func (s *BoardService) CreateBoard(name, description string, ownerID uint) (*mod
 		ownerID,
 	)
 
-	return createdBoard
+	return createdBoard, nil
 }
 
 func (s *BoardService) GetBoardByID(boardID, userID uint) (*models.Board, error) {
@@ -143,7 +143,7 @@ func (s *BoardService) UpdateBoard(boardID uint, name, description *string, user
 		dto.MapBoardToResponse(updatedBoard, true, false), // Use dto mapper
 		userID,
 	)
-	return updatedBoard
+	return updatedBoard, nil
 }
 
 func (s *BoardService) DeleteBoard(boardID, userID uint) error {
@@ -238,7 +238,7 @@ func (s *BoardService) AddMemberToBoard(boardID uint, email *string, memberUserI
 		dto.MapBoardMemberToResponse(addedMember), // Use dto mapper
 		currentUserID,
 	)
-	return addedMember
+	return addedMember, nil
 }
 
 func (s *BoardService) RemoveMemberFromBoard(boardID, memberUserID, currentUserID uint) error {
