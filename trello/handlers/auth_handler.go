@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/zayyadi/trello/dto" // Import new dto package
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
@@ -18,7 +19,7 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req RegisterRequest
+	var req dto.RegisterRequest // Use dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request payload: "+err.Error())
 		return
@@ -30,18 +31,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	userResp := UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}
-	RespondWithSuccess(c, http.StatusCreated, "User registered successfully", AuthResponse{User: userResp, Token: token})
+	userResp := dto.MapUserToResponse(user) // Use dto.MapUserToResponse
+	RespondWithSuccess(c, http.StatusCreated, "User registered successfully", dto.AuthResponse{User: userResp, Token: token}) // Use dto.AuthResponse
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req LoginRequest
+	var req dto.LoginRequest // Use dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request payload: "+err.Error())
 		return
@@ -53,26 +48,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	userResp := UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}
-	RespondWithSuccess(c, http.StatusOK, "Login successful", AuthResponse{User: userResp, Token: token})
+	userResp := dto.MapUserToResponse(user) // Use dto.MapUserToResponse
+	RespondWithSuccess(c, http.StatusOK, "Login successful", dto.AuthResponse{User: userResp, Token: token}) // Use dto.AuthResponse
 }
 
-// Helper to map model.User to UserResponse
-func MapUserToResponse(user *models.User) UserResponse {
-	if user == nil {
-		return UserResponse{}
-	}
-	return UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}
-}
+// MapUserToResponse function is now in dto/auth_dto.go and will be removed from here.

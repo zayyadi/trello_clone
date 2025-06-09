@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/zayyadi/trello/dto" // Import new dto package
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
@@ -27,8 +28,9 @@ func (h *CardHandler) CreateCard(c *gin.Context) {
 		return
 	}
 
-	var req CreateCardRequest
+	var req dto.CreateCardRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil { /* ... error handling ... */
+		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error()) // Ensure proper error response
 		return
 	}
 
@@ -43,7 +45,11 @@ func (h *CardHandler) CreateCard(c *gin.Context) {
 		req.Color,        // Pass new field
 		userID.(uint),
 	)
-	RespondWithSuccess(c, http.StatusCreated, "Card created successfully", MapCardToResponse(card, true))
+	if err != nil { // Error handling for service call
+		HandleServiceError(c, err)
+		return
+	}
+	RespondWithSuccess(c, http.StatusCreated, "Card created successfully", dto.MapCardToResponse(card, true)) // Use dto mapper
 }
 
 func (h *CardHandler) GetCardByID(c *gin.Context) {
@@ -60,7 +66,7 @@ func (h *CardHandler) GetCardByID(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "Card retrieved successfully", MapCardToResponse(card, true))
+	RespondWithSuccess(c, http.StatusOK, "Card retrieved successfully", dto.MapCardToResponse(card, true)) // Use dto mapper
 }
 
 func (h *CardHandler) GetCardsByListID(c *gin.Context) {
@@ -77,9 +83,9 @@ func (h *CardHandler) GetCardsByListID(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	var cardResponses []CardResponse
+	var cardResponses []dto.CardResponse // Use dto type
 	for _, card := range cards {
-		cardResponses = append(cardResponses, MapCardToResponse(&card, true))
+		cardResponses = append(cardResponses, dto.MapCardToResponse(&card, true)) // Use dto mapper
 	}
 	RespondWithSuccess(c, http.StatusOK, "Cards retrieved successfully", cardResponses)
 }
@@ -93,8 +99,9 @@ func (h *CardHandler) UpdateCard(c *gin.Context) {
 		return
 	}
 
-	var req UpdateCardRequest
+	var req dto.UpdateCardRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil { /* ... error handling ... */
+		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error()) // Ensure proper error response
 		return
 	}
 
@@ -114,7 +121,7 @@ func (h *CardHandler) UpdateCard(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "Card updated successfully", MapCardToResponse(card, true))
+	RespondWithSuccess(c, http.StatusOK, "Card updated successfully", dto.MapCardToResponse(card, true)) // Use dto mapper
 }
 
 func (h *CardHandler) DeleteCard(c *gin.Context) {
@@ -143,7 +150,7 @@ func (h *CardHandler) MoveCard(c *gin.Context) {
 		return
 	}
 
-	var req MoveCardRequest
+	var req dto.MoveCardRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -154,56 +161,11 @@ func (h *CardHandler) MoveCard(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "Card moved successfully", MapCardToResponse(card, true))
+	RespondWithSuccess(c, http.StatusOK, "Card moved successfully", dto.MapCardToResponse(card, true)) // Use dto mapper
 }
 
-// Helper to map model.Card to CardResponse
-func MapCardToResponse(card *models.Card, includeAssignedUser bool) CardResponse {
-	if card == nil {
-		return CardResponse{}
-	}
-	resp := CardResponse{
-		ID:             card.ID,
-		Title:          card.Title,
-		Description:    card.Description,
-		ListID:         card.ListID,
-		Position:       card.Position,
-		DueDate:        card.DueDate,
-		Status:         card.Status, // New field
-		AssignedUserID: card.AssignedUserID,
-		SupervisorID:   card.SupervisorID, // New field
-		Color:          card.Color,        // New field
-		CreatedAt:      card.CreatedAt,
-		UpdatedAt:      card.UpdatedAt,
-	}
-	if includeAssignedUser { // Re-purpose this flag or add a new one for supervisor
-		if card.AssignedUser != nil && card.AssignedUser.ID != 0 {
-			resp.AssignedUser = &UserResponse{
-				ID: card.AssignedUser.ID, Username: card.AssignedUser.Username, Email: card.AssignedUser.Email,
-			}
-		}
-		if card.Supervisor != nil && card.Supervisor.ID != 0 { // New field
-			resp.Supervisor = &UserResponse{
-				ID: card.Supervisor.ID, Username: card.Supervisor.Username, Email: card.Supervisor.Email,
-			}
-		}
-	}
-
-	if card.Collaborators != nil {
-		resp.Collaborators = make([]UserResponse, len(card.Collaborators))
-		for i, collaborator := range card.Collaborators {
-			// MapUserToResponse is already available in this package (from user_handler.go or a shared DTO mapping file)
-			// If it were not, a local mapping or import would be needed.
-			// For this exercise, we assume MapUserToResponse handles *models.User to UserResponse.
-			// card.Collaborators is of type []*models.User, so 'collaborator' in the loop is *models.User.
-			resp.Collaborators[i] = MapUserToResponse(collaborator)
-		}
-	} else {
-		resp.Collaborators = []UserResponse{} // Ensure empty slice instead of null
-	}
-
-	return resp
-}
+// MapCardToResponse function is now in dto/card_dto.go
+// MapUserToResponse is in dto/auth_dto.go
 
 func (h *CardHandler) AddCollaborator(c *gin.Context) {
 	currentUserID, _ := c.Get("userID")
@@ -220,7 +182,7 @@ func (h *CardHandler) AddCollaborator(c *gin.Context) {
 		return
 	}
 
-	var req CardAddCollaboratorRequest
+	var req dto.CardAddCollaboratorRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request body: "+err.Error())
 		return
@@ -245,7 +207,7 @@ func (h *CardHandler) AddCollaborator(c *gin.Context) {
 		HandleServiceError(c, err) // HandleServiceError should map service errors to HTTP errors
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "Collaborator added successfully", MapUserToResponse(addedUser))
+	RespondWithSuccess(c, http.StatusOK, "Collaborator added successfully", dto.MapUserToResponse(addedUser)) // Use dto mapper
 }
 
 func (h *CardHandler) RemoveCollaborator(c *gin.Context) {
@@ -299,9 +261,9 @@ func (h *CardHandler) GetCollaborators(c *gin.Context) {
 		return
 	}
 
-	userResponses := make([]UserResponse, len(users))
+	var userResponses []dto.UserResponse // Use dto type
 	for i, user := range users {
-		userResponses[i] = MapUserToResponse(&user)
+		userResponses[i] = dto.MapUserToResponse(&user) // Use dto mapper
 	}
 	RespondWithSuccess(c, http.StatusOK, "Collaborators retrieved successfully", userResponses)
 }

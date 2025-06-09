@@ -3,7 +3,7 @@ package services
 import (
 	"errors"
 
-	"github.com/zayyadi/trello/handlers" // For DTOs
+	"github.com/zayyadi/trello/dto" // Changed import
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/repositories"
 	"github.com/zayyadi/trello/realtime"
@@ -73,7 +73,7 @@ func (s *BoardService) CreateBoard(name, description string, ownerID uint) (*mod
 		s.hub,
 		createdBoard.ID,
 		realtime.MessageTypeBoardCreated,
-		handlers.MapBoardToBoardResponse(createdBoard), // Use existing DTO mapper
+		dto.MapBoardToResponse(createdBoard, true, false), // Use dto mapper, adjust flags as needed
 		ownerID,
 	)
 
@@ -140,7 +140,7 @@ func (s *BoardService) UpdateBoard(boardID uint, name, description *string, user
 		s.hub,
 		updatedBoard.ID,
 		realtime.MessageTypeBoardUpdated,
-		handlers.MapBoardToBoardResponse(updatedBoard),
+		dto.MapBoardToResponse(updatedBoard, true, false), // Use dto mapper
 		userID,
 	)
 	return updatedBoard
@@ -235,7 +235,7 @@ func (s *BoardService) AddMemberToBoard(boardID uint, email *string, memberUserI
 		s.hub,
 		boardID,
 		realtime.MessageTypeBoardMemberAdded,
-		handlers.MapBoardMemberToResponse(addedMember), // Use existing DTO mapper
+		dto.MapBoardMemberToResponse(addedMember), // Use dto mapper
 		currentUserID,
 	)
 	return addedMember

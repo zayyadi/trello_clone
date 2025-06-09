@@ -5,15 +5,16 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zayyadi/trello/dto" // Import new dto package
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 )
 
 type BoardHandler struct {
-	boardService *services.BoardService
+	boardService services.BoardServiceInterface // Use interface type
 }
 
-func NewBoardHandler(boardService *services.BoardService) *BoardHandler {
+func NewBoardHandler(boardService services.BoardServiceInterface) *BoardHandler { // Use interface type
 	return &BoardHandler{boardService: boardService}
 }
 
@@ -24,7 +25,7 @@ func (h *BoardHandler) CreateBoard(c *gin.Context) {
 		return
 	}
 
-	var req CreateBoardRequest
+	var req dto.CreateBoardRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -35,7 +36,7 @@ func (h *BoardHandler) CreateBoard(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusCreated, "Board created successfully", MapBoardToResponse(board, true, false)) // Include owner, not lists/members by default
+	RespondWithSuccess(c, http.StatusCreated, "Board created successfully", dto.MapBoardToResponse(board, true, false)) // Use dto mapper
 }
 
 func (h *BoardHandler) GetBoardByID(c *gin.Context) {
@@ -58,7 +59,7 @@ func (h *BoardHandler) GetBoardByID(c *gin.Context) {
 	// Assuming lists are not preloaded by default in BoardService.GetBoardByID for this specific path
 	// but GetListsByBoardID service method would be used.
 	// For simplicity, we will use the BoardResponse mapping which can conditionally include them.
-	RespondWithSuccess(c, http.StatusOK, "Board retrieved successfully", MapBoardToResponse(fullBoard, true, true))
+	RespondWithSuccess(c, http.StatusOK, "Board retrieved successfully", dto.MapBoardToResponse(fullBoard, true, true)) // Use dto mapper
 }
 
 func (h *BoardHandler) GetBoardsForUser(c *gin.Context) {
@@ -68,9 +69,9 @@ func (h *BoardHandler) GetBoardsForUser(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	var boardResponses []BoardResponse
+	var boardResponses []dto.BoardResponse // Use dto type
 	for _, b := range boards {
-		boardResponses = append(boardResponses, MapBoardToResponse(&b, true, false)) // Include owner, not lists/members
+		boardResponses = append(boardResponses, dto.MapBoardToResponse(&b, true, false)) // Use dto mapper
 	}
 	RespondWithSuccess(c, http.StatusOK, "Boards retrieved successfully", boardResponses)
 }
@@ -84,7 +85,7 @@ func (h *BoardHandler) UpdateBoard(c *gin.Context) {
 		return
 	}
 
-	var req UpdateBoardRequest
+	var req dto.UpdateBoardRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -95,7 +96,7 @@ func (h *BoardHandler) UpdateBoard(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "Board updated successfully", MapBoardToResponse(board, true, false))
+	RespondWithSuccess(c, http.StatusOK, "Board updated successfully", dto.MapBoardToResponse(board, true, false)) // Use dto mapper
 }
 
 func (h *BoardHandler) DeleteBoard(c *gin.Context) {
@@ -124,7 +125,7 @@ func (h *BoardHandler) AddMemberToBoard(c *gin.Context) {
 		return
 	}
 
-	var req AddMemberRequest
+	var req dto.AddMemberRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -143,7 +144,7 @@ func (h *BoardHandler) AddMemberToBoard(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusCreated, "Member added to board successfully", MapBoardMemberToResponse(boardMember))
+	RespondWithSuccess(c, http.StatusCreated, "Member added to board successfully", dto.MapBoardMemberToResponse(boardMember)) // Use dto mapper
 }
 
 func (h *BoardHandler) RemoveMemberFromBoard(c *gin.Context) {
@@ -185,56 +186,13 @@ func (h *BoardHandler) GetBoardMembers(c *gin.Context) {
 		return
 	}
 
-	var memberResponses []BoardMemberResponse
+	var memberResponses []dto.BoardMemberResponse // Use dto type
 	for _, m := range members {
-		memberResponses = append(memberResponses, MapBoardMemberToResponse(&m))
+		memberResponses = append(memberResponses, dto.MapBoardMemberToResponse(&m)) // Use dto mapper
 	}
 	RespondWithSuccess(c, http.StatusOK, "Board members retrieved successfully", memberResponses)
 }
 
-// Helper to map model.Board to BoardResponse
-func MapBoardToResponse(board *models.Board, includeOwner, includeMembersAndLists bool) BoardResponse {
-	if board == nil {
-		return BoardResponse{}
-	}
-	resp := BoardResponse{
-		ID:          board.Model.ID,
-		Name:        board.Name,
-		Description: board.Description,
-		OwnerID:     board.OwnerID,
-		CreatedAt:   board.Model.CreatedAt,
-		UpdatedAt:   board.Model.UpdatedAt,
-	}
-	if includeOwner && board.Owner.ID != 0 {
-		resp.Owner = MapUserToResponse(&board.Owner)
-	}
-	if includeMembersAndLists {
-		if len(board.Members) > 0 {
-			resp.Members = []BoardMemberResponse{}
-			for _, m := range board.Members {
-				resp.Members = append(resp.Members, MapBoardMemberToResponse(&m))
-			}
-		}
-		if len(board.Lists) > 0 {
-			resp.Lists = []ListResponse{}
-			for _, l := range board.Lists {
-				// For lists within board response, don't include cards by default to avoid huge payloads
-				resp.Lists = append(resp.Lists, MapListToResponse(&l, false))
-			}
-		}
-	}
-	return resp
-}
-
-// Helper to map model.BoardMember to BoardMemberResponse
-func MapBoardMemberToResponse(member *models.BoardMember) BoardMemberResponse {
-	if member == nil {
-		return BoardMemberResponse{}
-	}
-	return BoardMemberResponse{
-		BoardID:   member.BoardID,
-		UserID:    member.UserID,
-		User:      MapUserToResponse(&member.User),
-		CreatedAt: member.CreatedAt,
-	}
-}
+// Mapping functions MapBoardToResponse and MapBoardMemberToResponse are now in dto/board_dto.go
+// MapUserToResponse is in dto/auth_dto.go (which will be imported as part of dto package)
+// MapListToResponse will be in dto/list_dto.go

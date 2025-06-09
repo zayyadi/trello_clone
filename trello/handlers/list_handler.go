@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/zayyadi/trello/dto" // Import new dto package
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
@@ -11,7 +12,7 @@ import (
 )
 
 type ListHandler struct {
-	listService *services.ListService
+	listService *services.ListService // Assuming ListService doesn't need an interface yet, or it's services.ListServiceInterface
 }
 
 func NewListHandler(listService *services.ListService) *ListHandler {
@@ -27,7 +28,7 @@ func (h *ListHandler) CreateList(c *gin.Context) {
 		return
 	}
 
-	var req CreateListRequest
+	var req dto.CreateListRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -38,7 +39,7 @@ func (h *ListHandler) CreateList(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusCreated, "List created successfully", MapListToResponse(list, false)) // Don't include cards by default
+	RespondWithSuccess(c, http.StatusCreated, "List created successfully", dto.MapListToResponse(list, false)) // Use dto mapper
 }
 
 func (h *ListHandler) GetListsByBoardID(c *gin.Context) {
@@ -55,9 +56,9 @@ func (h *ListHandler) GetListsByBoardID(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	var listResponses []ListResponse
+	var listResponses []dto.ListResponse // Use dto type
 	for _, l := range lists {
-		listResponses = append(listResponses, MapListToResponse(&l, true)) // Include cards when fetching lists for a board
+		listResponses = append(listResponses, dto.MapListToResponse(&l, true)) // Use dto mapper
 	}
 	RespondWithSuccess(c, http.StatusOK, "Lists retrieved successfully", listResponses)
 }
@@ -71,7 +72,7 @@ func (h *ListHandler) UpdateList(c *gin.Context) {
 		return
 	}
 
-	var req UpdateListRequest
+	var req dto.UpdateListRequest // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
@@ -82,7 +83,7 @@ func (h *ListHandler) UpdateList(c *gin.Context) {
 		HandleServiceError(c, err)
 		return
 	}
-	RespondWithSuccess(c, http.StatusOK, "List updated successfully", MapListToResponse(list, false))
+	RespondWithSuccess(c, http.StatusOK, "List updated successfully", dto.MapListToResponse(list, false)) // Use dto mapper
 }
 
 func (h *ListHandler) DeleteList(c *gin.Context) {
@@ -102,24 +103,5 @@ func (h *ListHandler) DeleteList(c *gin.Context) {
 	RespondWithSuccess(c, http.StatusOK, "List deleted successfully", nil)
 }
 
-// Helper to map model.List to ListResponse
-func MapListToResponse(list *models.List, includeCards bool) ListResponse {
-	if list == nil {
-		return ListResponse{}
-	}
-	resp := ListResponse{
-		ID:        list.ID,
-		Name:      list.Name,
-		BoardID:   list.BoardID,
-		Position:  list.Position,
-		CreatedAt: list.CreatedAt,
-		UpdatedAt: list.UpdatedAt,
-	}
-	if includeCards && len(list.Cards) > 0 {
-		resp.Cards = []CardResponse{}
-		for _, c := range list.Cards {
-			resp.Cards = append(resp.Cards, MapCardToResponse(&c, true)) // Include assigned user for cards
-		}
-	}
-	return resp
-}
+// MapListToResponse function is now in dto/list_dto.go
+// MapCardToResponse will be in dto/card_dto.go
