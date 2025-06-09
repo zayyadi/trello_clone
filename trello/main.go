@@ -8,12 +8,17 @@ import (
 	"github.com/zayyadi/trello/handlers"
 	middleware "github.com/zayyadi/trello/middlewares"
 	"github.com/zayyadi/trello/repositories"
+	"github.com/zayyadi/trello/realtime" // Import realtime package
 	"github.com/zayyadi/trello/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// Initialize Hub
+	hub := realtime.NewHub()
+	go hub.Run()
+
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -36,9 +41,9 @@ func main() {
 
 	// Initialize Services
 	authService := services.NewAuthService(userRepo, cfg.JWTSecretKey)
-	boardService := services.NewBoardService(boardRepo, userRepo, boardMemberRepo)
-	listService := services.NewListService(listRepo, boardRepo, boardMemberRepo)
-	cardService := services.NewCardService(cardRepo, listRepo, boardRepo, boardMemberRepo, userRepo)          // Added userRepo
+	boardService := services.NewBoardService(boardRepo, userRepo, boardMemberRepo, hub) // Pass hub
+	listService := services.NewListService(listRepo, boardRepo, boardMemberRepo, hub)  // Pass hub
+	cardService := services.NewCardService(cardRepo, listRepo, boardRepo, boardMemberRepo, userRepo, hub) // Pass hub
 	commentService := services.NewCommentService(commentRepo, cardRepo, listRepo, boardRepo, boardMemberRepo) // Initialize CommentService
 
 	// Initialize Handlers
@@ -47,6 +52,7 @@ func main() {
 	listHandler := handlers.NewListHandler(listService)
 	cardHandler := handlers.NewCardHandler(cardService)
 	commentHandler := handlers.NewCommentHandler(commentService) // Initialize CommentHandler
+	wsHandler := handlers.NewWebSocketHandler(hub)               // Initialize WebSocketHandler
 
 	// Setup Gin router
 	// gin.SetMode(gin.ReleaseMode) // Uncomment for production
@@ -115,6 +121,9 @@ func main() {
 		api.GET("/cards/:cardID/collaborators", cardHandler.GetCollaborators)
 		api.DELETE("/cards/:cardID/collaborators/:userID", cardHandler.RemoveCollaborator)
 	}
+
+	// WebSocket route
+	router.GET("/ws", wsHandler.HandleConnections)
 
 	// Start server
 	port := cfg.ServerPort

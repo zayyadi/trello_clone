@@ -3,8 +3,10 @@ package services
 import (
 	"errors"
 
+	"github.com/zayyadi/trello/handlers" // For DTOs
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/repositories"
+	"github.com/zayyadi/trello/realtime"
 
 	"gorm.io/gorm"
 )
@@ -13,14 +15,21 @@ type ListService struct {
 	listRepo        repositories.ListRepositoryInterface
 	boardRepo       repositories.BoardRepositoryInterface // For permission checks via BoardService logic
 	boardMemberRepo repositories.BoardMemberRepositoryInterface
+	hub             *realtime.Hub
 }
 
 func NewListService(
 	listRepo repositories.ListRepositoryInterface,
 	boardRepo repositories.BoardRepositoryInterface,
 	boardMemberRepo repositories.BoardMemberRepositoryInterface,
+	hub *realtime.Hub,
 ) *ListService {
-	return &ListService{listRepo: listRepo, boardRepo: boardRepo, boardMemberRepo: boardMemberRepo}
+	return &ListService{
+		listRepo:        listRepo,
+		boardRepo:       boardRepo,
+		boardMemberRepo: boardMemberRepo,
+		hub:             hub,
+	}
 }
 
 // Helper to check board access
@@ -79,7 +88,21 @@ func (s *ListService) CreateList(name string, boardID uint, userID uint, positio
 		// For simplicity, the repo's Create method sets it to max + 1.
 	}
 
-	return s.listRepo.FindByID(list.ID) // Fetch with details
+	createdList, err := s.listRepo.FindByID(list.ID) // Fetch with details
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast list creation
+	broadcastMessage(
+		s.hub,
+		createdList.BoardID,
+		realtime.MessageTypeListCreated,
+		handlers.MapListToListResponse(createdList), // Use existing DTO mapper
+		userID,
+	)
+
+	return createdList
 }
 
 func (s *ListService) GetListsByBoardID(boardID uint, userID uint) ([]models.List, error) {
@@ -175,7 +198,21 @@ func (s *ListService) UpdateList(listID uint, name *string, newPosition *uint, u
 		}
 	}
 
-	return s.listRepo.FindByID(list.ID) // Fetch updated list
+	updatedList, err := s.listRepo.FindByID(list.ID) // Fetch updated list
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast list update
+	broadcastMessage(
+		s.hub,
+		updatedList.BoardID,
+		realtime.MessageTypeListUpdated,
+		handlers.MapListToListResponse(updatedList),
+		userID,
+	)
+
+	return updatedList
 }
 
 func (s *ListService) DeleteList(listID uint, userID uint) error {
@@ -210,7 +247,21 @@ func (s *ListService) DeleteList(listID uint, userID uint) error {
 		// Let's assume `s.listRepo.Delete` is a simple operation for now.
 		// If `s.listRepo.Delete` itself starts a new transaction, this won't be a single atomic one.
 		// For this refactor, we'll keep it as is, and it implies `listRepo.Delete` does not manage its own tx.
-		return s.listRepo.Delete(listID)
+		// We need the list's BoardID for broadcasting before it's deleted, or ensure it's part of the info passed to Delete.
+		// The current list variable holds the details.
+		boardID := list.BoardID
+		err := s.listRepo.Delete(listID) // Assuming this is the actual delete operation
+		if err == nil {
+			// Broadcast list deletion
+			broadcastMessage(
+				s.hub,
+				boardID, // Use the boardID captured before deletion
+				realtime.MessageTypeListDeleted,
+				realtime.ListBasicInfo{ID: listID, BoardID: boardID}, // Simple payload
+				userID,
+			)
+		}
+		return err
 	})
 	return err
 }

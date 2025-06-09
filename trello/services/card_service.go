@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/zayyadi/trello/handlers" // For DTOs
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/repositories"
+	"github.com/zayyadi/trello/realtime"
 
 	"gorm.io/gorm"
 )
@@ -30,6 +32,7 @@ type CardService struct {
 	boardRepo       repositories.BoardRepositoryInterface // For permission checks
 	boardMemberRepo repositories.BoardMemberRepositoryInterface
 	userRepo        repositories.UserRepositoryInterface // Added for collaborator methods
+	hub             *realtime.Hub
 }
 
 func NewCardService(
@@ -38,6 +41,7 @@ func NewCardService(
 	boardRepo repositories.BoardRepositoryInterface,
 	boardMemberRepo repositories.BoardMemberRepositoryInterface,
 	userRepo repositories.UserRepositoryInterface, // Added
+	hub *realtime.Hub,
 ) CardServiceInterface { // Return interface type
 	return &CardService{
 		cardRepo:        cardRepo,
@@ -45,6 +49,7 @@ func NewCardService(
 		boardRepo:       boardRepo,
 		boardMemberRepo: boardMemberRepo,
 		userRepo:        userRepo, // Added
+		hub:             hub,
 	}
 }
 
@@ -89,7 +94,8 @@ func (s *CardService) checkAccessViaCard(userID, cardID uint) (uint, uint, error
 }
 
 func (s *CardService) CreateCard(listID uint, title, description string, position *uint, dueDate *time.Time, assignedUserID *uint, supervisorID *uint, color *string, currentUserID uint) (*models.Card, error) {
-	if _, err := s.checkAccessViaList(currentUserID, listID); err != nil {
+	boardID, err := s.checkAccessViaList(currentUserID, listID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -111,8 +117,22 @@ func (s *CardService) CreateCard(listID uint, title, description string, positio
 	if err := s.cardRepo.Create(card); err != nil {
 		return nil, err
 	}
-	// ...
-	return s.cardRepo.FindByID(card.ID) // Will now preload supervisor too
+
+	createdCard, err := s.cardRepo.FindByID(card.ID) // Will now preload supervisor too
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast card creation
+	broadcastMessage(
+		s.hub,
+		boardID, // Obtained from checkAccessViaList
+		realtime.MessageTypeCardCreated,
+		handlers.MapCardToCardResponse(createdCard),
+		currentUserID,
+	)
+
+	return createdCard
 }
 
 func (s *CardService) GetCardByID(cardID uint, currentUserID uint) (*models.Card, error) {
@@ -274,7 +294,39 @@ func (s *CardService) UpdateCard(
 			return nil, err
 		}
 	}
-	return s.cardRepo.FindByID(card.ID)
+
+	updatedCard, err := s.cardRepo.FindByID(card.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast card update
+	broadcastMessage(
+		s.hub,
+		boardID, // Obtained from checkAccessViaCard
+		realtime.MessageTypeCardUpdated,
+		handlers.MapCardToCardResponse(updatedCard),
+		currentUserID,
+	)
+
+	// Handle assignment/unassignment messages
+	if assignedUserID != nil {
+		if *assignedUserID == nil { // Unassigned
+			broadcastMessage(s.hub, boardID, realtime.MessageTypeCardUnassigned, realtime.CardBasicInfo{ID: cardID, ListID: listID, BoardID: boardID}, currentUserID)
+		} else { // Assigned or changed assignee
+			// We might want to include more assignee details in the payload here
+			assigneePayload := struct {
+				CardID    uint  `json:"cardId"`
+				UserID    uint  `json:"userId"`
+				BoardID   uint  `json:"boardId"`
+				ListID    uint  `json:"listId"`
+			}{cardID, **assignedUserID, boardID, listID}
+			broadcastMessage(s.hub, boardID, realtime.MessageTypeCardAssigned, assigneePayload, currentUserID)
+		}
+	}
+
+
+	return updatedCard
 }
 
 func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
@@ -300,7 +352,7 @@ func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
 		return ErrCardNotFound
 	}
 
-	return s.cardRepo.PerformTransaction(func(tx *gorm.DB) error {
+	err = s.cardRepo.PerformTransaction(func(tx *gorm.DB) error {
 		// Shift positions of subsequent cards in the same list
 		if err := tx.Model(&models.Card{}).
 			Where("list_id = ? AND position > ?", listID, card.Position).
@@ -310,21 +362,44 @@ func (s *CardService) DeleteCard(cardID uint, currentUserID uint) error {
 		// Delete the card
 		return tx.Delete(&models.Card{}, cardID).Error
 	})
+
+	if err == nil {
+		// Broadcast card deletion
+		broadcastMessage(
+			s.hub,
+			boardID, // Obtained from checkAccessViaCard
+			realtime.MessageTypeCardDeleted,
+			realtime.CardBasicInfo{ID: cardID, ListID: listID, BoardID: boardID},
+			currentUserID,
+		)
+	}
+	return err
 }
 
 func (s *CardService) MoveCard(cardID uint, targetListID uint, newPosition uint, currentUserID uint) (*models.Card, error) {
-	_, originalListID, err := s.checkAccessViaCard(currentUserID, cardID)
+	boardID, originalListID, err := s.checkAccessViaCard(currentUserID, cardID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.checkAccessViaList(currentUserID, targetListID); err != nil { // Check access to target list
+	targetBoardID, err := s.checkAccessViaList(currentUserID, targetListID) // Check access to target list
+	if err != nil {
 		return nil, err
 	}
+
+	if boardID != targetBoardID {
+		// Moving card across boards is not supported by this message structure easily,
+		// as broadcasting is per-board. This implies an error or more complex handling needed.
+		// For now, assume targetListID is on the same board.
+		// If they can differ, the broadcasting logic needs to be revisited (e.g., two messages).
+		return nil, errors.New("moving card to a different board is not directly supported for simple broadcast")
+	}
+
 
 	card, err := s.cardRepo.FindByID(cardID)
 	if err != nil {
 		return nil, ErrCardNotFound
 	}
+	originalPosition := card.Position // Capture original position before move
 
 	// Validate newPosition (basic: >=1)
 	if newPosition < 1 {
@@ -337,7 +412,30 @@ func (s *CardService) MoveCard(cardID uint, targetListID uint, newPosition uint,
 		return nil, err
 	}
 
-	return s.cardRepo.FindByID(card.ID) // Return updated card
+	movedCard, err := s.cardRepo.FindByID(card.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast card move
+	payload := realtime.CardMovedPayload{
+		CardID:      cardID,
+		OldListID:   originalListID,
+		NewListID:   targetListID,
+		OldPosition: originalPosition,
+		NewPosition: movedCard.Position, // Use the final position from the moved card
+		BoardID:     boardID,
+		// UpdatedCards could be populated here if the MoveCard repo method returned them
+	}
+	broadcastMessage(
+		s.hub,
+		boardID,
+		realtime.MessageTypeCardMoved,
+		payload,
+		currentUserID,
+	)
+
+	return movedCard
 }
 
 // AddCollaboratorToCard adds a user as a collaborator to a card.
@@ -382,14 +480,29 @@ func (s *CardService) AddCollaboratorToCard(cardID uint, currentUserID uint, tar
 	if terr != nil {
 		return nil, terr
 	}
-	if isCollab {
-		// Optionally, return specific error like ErrAlreadyCollaborator
-		// For now, just returning the user as if successfully added (idempotency)
-		return targetUser, nil
+
+	if !isCollab {
+		if terr = s.cardRepo.AddCollaborator(cardID, targetUser.ID); terr != nil {
+			return nil, terr
+		}
 	}
 
-	if terr = s.cardRepo.AddCollaborator(cardID, targetUser.ID); terr != nil {
-		return nil, terr
+	// Broadcast collaborator addition (even if already a collab, for idempotency or client sync)
+	// Or only broadcast if !isCollab
+	if !isCollab { // Only broadcast if it's a new addition
+		collabPayload := realtime.CardCollaboratorPayload{
+			CardID:   cardID,
+			UserID:   targetUser.ID,
+			BoardID:  boardID,
+			UserName: targetUser.Name, // Assuming User model has Name
+		}
+		broadcastMessage(
+			s.hub,
+			boardID,
+			realtime.MessageTypeCardCollaboratorAdded,
+			collabPayload,
+			currentUserID,
+		)
 	}
 	return targetUser, nil
 }
@@ -427,7 +540,24 @@ func (s *CardService) RemoveCollaboratorFromCard(cardID uint, currentUserID uint
 	// For now, if currentUserID has access to the card (board member), they can remove anyone.
 	// A stricter rule might be: board owner can remove anyone, card assignees/collaborators can remove themselves.
 
-	return s.cardRepo.RemoveCollaborator(cardID, targetUserID)
+	err = s.cardRepo.RemoveCollaborator(cardID, targetUserID)
+	if err == nil {
+		// Broadcast collaborator removal
+		collabPayload := realtime.CardCollaboratorPayload{
+			CardID:  cardID,
+			UserID:  targetUserID,
+			BoardID: boardID,
+			// UserName might not be easily available here post-removal without another query
+		}
+		broadcastMessage(
+			s.hub,
+			boardID,
+			realtime.MessageTypeCardCollaboratorRemoved,
+			collabPayload,
+			currentUserID,
+		)
+	}
+	return err
 }
 
 // GetCardCollaborators retrieves all collaborators for a card.
