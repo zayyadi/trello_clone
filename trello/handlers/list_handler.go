@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/zayyadi/trello/dto" // Import new dto package
-	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
 	"github.com/gin-gonic/gin"

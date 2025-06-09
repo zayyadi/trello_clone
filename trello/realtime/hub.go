@@ -15,7 +15,7 @@ type Hub struct {
 	broadcast chan *WebSocketMessage
 
 	// Register requests from the clients.
-	register chan *Client
+	Register chan *Client
 
 	// Unregister requests from clients.
 	unregister chan *Client
@@ -25,7 +25,7 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		broadcast:  make(chan *WebSocketMessage), // Use WebSocketMessage
-		register:   make(chan *Client),
+		Register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[uint]map[*Client]bool),
 	}
@@ -46,7 +46,7 @@ func (h *Hub) Submit(msg *WebSocketMessage) {
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.register:
+		case client := <-h.Register:
 			if _, ok := h.clients[client.BoardID]; !ok { // Use client.BoardID
 				h.clients[client.BoardID] = make(map[*Client]bool)
 			}

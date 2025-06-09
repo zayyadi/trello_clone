@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/zayyadi/trello/dto" // Import new dto package
-	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +27,7 @@ func (h *CardHandler) CreateCard(c *gin.Context) {
 		return
 	}
 
-	var req dto.CreateCardRequest // Use dto type
+	var req dto.CreateCardRequest                  // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil { /* ... error handling ... */
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error()) // Ensure proper error response
 		return
@@ -99,7 +98,7 @@ func (h *CardHandler) UpdateCard(c *gin.Context) {
 		return
 	}
 
-	var req dto.UpdateCardRequest // Use dto type
+	var req dto.UpdateCardRequest                  // Use dto type
 	if err := c.ShouldBindJSON(&req); err != nil { /* ... error handling ... */
 		RespondWithError(c, http.StatusBadRequest, "Invalid request: "+err.Error()) // Ensure proper error response
 		return

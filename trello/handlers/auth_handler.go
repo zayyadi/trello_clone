@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/zayyadi/trello/dto" // Import new dto package
-	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 
 	"github.com/gin-gonic/gin"
@@ -31,7 +30,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	userResp := dto.MapUserToResponse(user) // Use dto.MapUserToResponse
+	userResp := dto.MapUserToResponse(user)                                                                                   // Use dto.MapUserToResponse
 	RespondWithSuccess(c, http.StatusCreated, "User registered successfully", dto.AuthResponse{User: userResp, Token: token}) // Use dto.AuthResponse
 }
 
@@ -48,7 +47,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	userResp := dto.MapUserToResponse(user) // Use dto.MapUserToResponse
+	userResp := dto.MapUserToResponse(user)                                                                  // Use dto.MapUserToResponse
 	RespondWithSuccess(c, http.StatusOK, "Login successful", dto.AuthResponse{User: userResp, Token: token}) // Use dto.AuthResponse
 }
 

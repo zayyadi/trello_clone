@@ -4,13 +4,15 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
 	// "strings" // Not used yet, but might be useful later
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5" // Import jwt
 	"github.com/gorilla/websocket"
+
 	// "github.com/zayyadi/trello/config" // JWTSecret will be passed in NewWebSocketHandler
-	"github.com/zayyadi/trello/models"  // Required for Claims
+	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/realtime"
 	"github.com/zayyadi/trello/services" // Will be needed for BoardService
 )
@@ -82,17 +84,16 @@ func (h *WebSocketHandler) HandleConnections(c *gin.Context) {
 	// Authorization Check
 	isMember, err := h.boardService.IsUserMemberOfBoard(userID, boardID)
 	if err != nil {
-	 log.Printf("WebSocket: Error checking board membership for user %d, board %d: %v", userID, boardID, err)
+		log.Printf("WebSocket: Error checking board membership for user %d, board %d: %v", userID, boardID, err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Could not verify board membership"})
 		return
 	}
 	if !isMember {
-	 log.Printf("WebSocket: User %d not authorized for board %d", userID, boardID)
+		log.Printf("WebSocket: User %d not authorized for board %d", userID, boardID)
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User not authorized for this board"})
 		return
 	}
 	log.Printf("WebSocket: User %d authorized for board %d", userID, boardID)
-
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {

@@ -7,8 +7,8 @@ import (
 	"github.com/zayyadi/trello/db"
 	"github.com/zayyadi/trello/handlers"
 	middleware "github.com/zayyadi/trello/middlewares"
-	"github.com/zayyadi/trello/repositories"
 	"github.com/zayyadi/trello/realtime" // Import realtime package
+	"github.com/zayyadi/trello/repositories"
 	"github.com/zayyadi/trello/services"
 
 	"github.com/gin-gonic/gin"
@@ -41,9 +41,9 @@ func main() {
 
 	// Initialize Services
 	authService := services.NewAuthService(userRepo, cfg.JWTSecretKey)
-	boardService := services.NewBoardService(boardRepo, userRepo, boardMemberRepo, hub) // Pass hub
-	listService := services.NewListService(listRepo, boardRepo, boardMemberRepo, hub)  // Pass hub
-	cardService := services.NewCardService(cardRepo, listRepo, boardRepo, boardMemberRepo, userRepo, hub) // Pass hub
+	boardService := services.NewBoardService(boardRepo, userRepo, boardMemberRepo, hub)                       // Pass hub
+	listService := services.NewListService(listRepo, boardRepo, boardMemberRepo, hub)                         // Pass hub
+	cardService := services.NewCardService(cardRepo, listRepo, boardRepo, boardMemberRepo, userRepo, hub)     // Pass hub
 	commentService := services.NewCommentService(commentRepo, cardRepo, listRepo, boardRepo, boardMemberRepo) // Initialize CommentService
 
 	// Initialize Handlers
@@ -51,8 +51,8 @@ func main() {
 	boardHandler := handlers.NewBoardHandler(boardService)
 	listHandler := handlers.NewListHandler(listService)
 	cardHandler := handlers.NewCardHandler(cardService)
-	commentHandler := handlers.NewCommentHandler(commentService) // Initialize CommentHandler
-	wsHandler := handlers.NewWebSocketHandler(hub)               // Initialize WebSocketHandler
+	commentHandler := handlers.NewCommentHandler(commentService)                   // Initialize CommentHandler
+	wsHandler := handlers.NewWebSocketHandler(hub, boardService, cfg.JWTSecretKey) // Initialize WebSocketHandler
 
 	// Setup Gin router
 	// gin.SetMode(gin.ReleaseMode) // Uncomment for production

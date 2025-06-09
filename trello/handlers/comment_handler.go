@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	dto "github.com/zayyadi/trello/dto"
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/services"
 )
@@ -28,20 +29,20 @@ type CreateCommentRequest struct {
 
 // CommentResponse defines the structure for comment responses.
 type CommentResponse struct {
-	ID        uint         `json:"id"`
-	Content   string       `json:"content"`
-	CardID    uint         `json:"cardID"`
-	UserID    uint         `json:"userID"`
-	User      UserResponse `json:"user"` // Reusing UserResponse from dto.go
-	CreatedAt time.Time    `json:"createdAt"`
-	UpdatedAt time.Time    `json:"updatedAt"`
+	ID        uint             `json:"id"`
+	Content   string           `json:"content"`
+	CardID    uint             `json:"cardID"`
+	UserID    uint             `json:"userID"`
+	User      dto.UserResponse `json:"user"` // Reusing UserResponse from dto.go
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 // MapCommentToResponse maps a models.Comment to CommentResponse.
 func MapCommentToResponse(comment *models.Comment) CommentResponse {
-	userResp := UserResponse{} // Default empty if user not preloaded
-	if comment.User.ID != 0 {  // Check if User struct is populated (not just zero values)
-		userResp = MapUserToResponse(&comment.User)
+	userResp := dto.UserResponse{} // Default empty if user not preloaded
+	if comment.User.ID != 0 {      // Check if User struct is populated (not just zero values)
+		userResp = dto.MapUserToResponse(&comment.User)
 	}
 	return CommentResponse{
 		ID:        comment.ID,
