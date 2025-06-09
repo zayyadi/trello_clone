@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/zayyadi/trello/models" // Ensure this import is correct
+)
 
 // Auth DTOs
 type RegisterRequest struct {
@@ -75,38 +79,32 @@ func MapUserToResponse(user *models.User) UserResponse {
 */
 // The above is the plan. Let's create the file with this structure.
 // The tool will take the content below.
-package dto
 
-import (
-	"time"
-	"github.com/zayyadi/trello/models" // Ensure this import is correct
-)
+// // Auth DTOs
+// type RegisterRequest struct {
+// 	Username string `json:"username" binding:"required,min=3,max=50"`
+// 	Email    string `json:"email" binding:"required,email"`
+// 	Password string `json:"password" binding:"required,min=6,max=100"`
+// }
 
-// Auth DTOs
-type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6,max=100"`
-}
+// type LoginRequest struct {
+// 	Email    string `json:"email" binding:"required,email"`
+// 	Password string `json:"password" binding:"required"`
+// }
 
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
+// type AuthResponse struct {
+// 	User  UserResponse `json:"user"`
+// 	Token string       `json:"token"`
+// }
 
-type AuthResponse struct {
-	User  UserResponse `json:"user"`
-	Token string       `json:"token"`
-}
-
-// UserResponse is the DTO for user information.
-type UserResponse struct {
-	ID        uint      `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
+// // UserResponse is the DTO for user information.
+// type UserResponse struct {
+// 	ID        uint      `json:"id"`
+// 	Username  string    `json:"username"`
+// 	Email     string    `json:"email"`
+// 	CreatedAt time.Time `json:"createdAt"`
+// 	UpdatedAt time.Time `json:"updatedAt"`
+// }
 
 // MapUserToResponse maps a models.User to a UserResponse DTO.
 func MapUserToResponse(user *models.User) UserResponse {
