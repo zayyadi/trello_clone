@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zayyadi/trello/handlers" // For DTOs
+	"github.com/zayyadi/trello/dto" // Changed import
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/repositories"
 	"github.com/zayyadi/trello/realtime"
@@ -128,7 +128,7 @@ func (s *CardService) CreateCard(listID uint, title, description string, positio
 		s.hub,
 		boardID, // Obtained from checkAccessViaList
 		realtime.MessageTypeCardCreated,
-		handlers.MapCardToCardResponse(createdCard),
+		dto.MapCardToResponse(createdCard, true), // Use dto mapper
 		currentUserID,
 	)
 
@@ -305,7 +305,7 @@ func (s *CardService) UpdateCard(
 		s.hub,
 		boardID, // Obtained from checkAccessViaCard
 		realtime.MessageTypeCardUpdated,
-		handlers.MapCardToCardResponse(updatedCard),
+		dto.MapCardToResponse(updatedCard, true), // Use dto mapper
 		currentUserID,
 	)
 

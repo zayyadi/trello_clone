@@ -3,7 +3,7 @@ package services
 import (
 	"errors"
 
-	"github.com/zayyadi/trello/handlers" // For DTOs
+	"github.com/zayyadi/trello/dto" // Changed import
 	"github.com/zayyadi/trello/models"
 	"github.com/zayyadi/trello/repositories"
 	"github.com/zayyadi/trello/realtime"
@@ -98,7 +98,7 @@ func (s *ListService) CreateList(name string, boardID uint, userID uint, positio
 		s.hub,
 		createdList.BoardID,
 		realtime.MessageTypeListCreated,
-		handlers.MapListToListResponse(createdList), // Use existing DTO mapper
+		dto.MapListToResponse(createdList, false), // Use dto mapper, adjust flags
 		userID,
 	)
 
@@ -208,7 +208,7 @@ func (s *ListService) UpdateList(listID uint, name *string, newPosition *uint, u
 		s.hub,
 		updatedList.BoardID,
 		realtime.MessageTypeListUpdated,
-		handlers.MapListToListResponse(updatedList),
+		dto.MapListToResponse(updatedList, false), // Use dto mapper
 		userID,
 	)
 

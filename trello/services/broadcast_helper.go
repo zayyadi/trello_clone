@@ -3,7 +3,8 @@ package services
 import (
 	"log"
 
-	"github.com/zayyadi/trello/handlers" // For DTOs as payload
+	"github.com/zayyadi/trello/dto" // Use new dto package for mappers
+	"github.com/zayyadi/trello/models" // Keep models import
 	"github.com/zayyadi/trello/realtime"
 )
 
@@ -50,21 +51,25 @@ func broadcastMessage(
 // without directly calling handler mapping functions in some scenarios.
 // For now, services will mostly use models or existing DTOs.
 
-// Example: MapBoardToBoardResponse is in handlers/dto.go.
+// Example: MapBoardToBoardResponse is now in dto/board_dto.go.
 // If a specific WebSocket payload is needed that's different from a handler DTO,
 // it can be defined and mapped here.
 
-// MapBoardToPayload converts a models.Board to handlers.BoardResponse for WebSocket payload
-func MapBoardToPayload(board *models.Board) handlers.BoardResponse {
-	return handlers.MapBoardToBoardResponse(board) // Reuse existing mapper
+// MapBoardToPayload converts a models.Board to dto.BoardResponse for WebSocket payload
+func MapBoardToPayload(board *models.Board) dto.BoardResponse {
+	// The boolean flags for includeOwner and includeMembersAndLists might need to be decided here.
+	// For WebSocket, usually, we want to send comprehensive data.
+	return dto.MapBoardToResponse(board, true, true)
 }
 
-// MapListToPayload converts a models.List to handlers.ListResponse
-func MapListToPayload(list *models.List) handlers.ListResponse {
-	return handlers.MapListToListResponse(list) // Reuse existing mapper
+// MapListToPayload converts a models.List to dto.ListResponse
+func MapListToPayload(list *models.List) dto.ListResponse {
+	// Similar to board, decide if cards should be included.
+	return dto.MapListToResponse(list, true)
 }
 
-// MapCardToPayload converts a models.Card to handlers.CardResponse
-func MapCardToPayload(card *models.Card) handlers.CardResponse {
-	return handlers.MapCardToCardResponse(card) // Reuse existing mapper
+// MapCardToPayload converts a models.Card to dto.CardResponse
+func MapCardToPayload(card *models.Card) dto.CardResponse {
+	// Decide if user details should be included.
+	return dto.MapCardToResponse(card, true)
 }
