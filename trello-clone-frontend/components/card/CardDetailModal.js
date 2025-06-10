@@ -10,7 +10,8 @@ import {
     updateCardDetails,
     fetchCardCollaborators,
     addCardCollaborator,
-    removeCardCollaborator
+    removeCardCollaborator,
+    moveCard // Import moveCard thunk
 } from '../../features/boards/boardsSlice';
 import { selectCurrentUser } from '../../features/auth/authSlice';
 import { selectCurrentBoard, selectListCardOpStatus, selectListCardOpError } from '../../features/boards/boardsSlice';
@@ -35,6 +36,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
   const [assignedUserID, setAssignedUserID] = useState('');
   const [supervisorID, setSupervisorID] = useState('');
   const [collaboratorInput, setCollaboratorInput] = useState('');
+  const [targetListId, setTargetListId] = useState(''); // State for target list for move
 
   const isBoardOwner = currentUser?.id === currentBoard?.ownerID;
   // Card details (including collaborators) will come from the `card` prop, which is updated by Redux state
@@ -45,6 +47,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
   // Dummy users for supervisor/assignee select. In a real app, fetch these or get from board members.
   // For collaborators, we will use the actual collaborator list from the card.
   const boardMembersForSelect = currentBoard?.members?.map(member => member.user) || [];
+  const availableListsForMove = currentBoard?.lists?.filter(l => l.id !== card?.listID) || [];
 
 
   useEffect(() => {
@@ -55,6 +58,7 @@ const CardDetailModal = ({ open, onClose, card }) => {
       setStatus(card.status?.toUpperCase() || 'TO_DO'); // Convert to uppercase on load, default to TO_DO
       setAssignedUserID(card.assignedUserID ? String(card.assignedUserID) : '');
       setSupervisorID(card.supervisorID ? String(card.supervisorID) : '');
+      setTargetListId(''); // Reset target list when card changes or modal opens
 
       // Fetch collaborators if card exists and collaborators are not yet fetched/present
       // (Or if they might have changed, though for simplicity, just fetch if undefined)
@@ -97,6 +101,29 @@ const CardDetailModal = ({ open, onClose, card }) => {
   const handleRemoveCollaborator = (userIdToRemove) => {
     dispatch(removeCardCollaborator({ cardId: card.id, userIdToRemove }));
   };
+
+  const handleMoveCard = () => {
+    if (!targetListId) {
+      console.warn("No target list selected for move.");
+      // Optionally, show an alert to the user
+      return;
+    }
+    const targetList = currentBoard?.lists?.find(l => l.id === parseInt(targetListId));
+    const newPosition = targetList?.cards?.length + 1 || 1;
+
+    dispatch(moveCard({
+      cardId: card.id,
+      targetListId: parseInt(targetListId),
+      newPosition: newPosition
+    }));
+    onClose(); // Close modal after dispatching move
+  };
+
+  // Logging for debugging member population
+  console.log('[CardDetailModal] currentBoard from selector:', currentBoard);
+  console.log('[CardDetailModal] currentBoard.members:', currentBoard?.members);
+  console.log('[CardDetailModal] boardMembersForSelect for dropdowns:', boardMembersForSelect);
+
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md"> {/* Changed to md for more space */}
@@ -168,6 +195,23 @@ const CardDetailModal = ({ open, onClose, card }) => {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Move Card Dropdown */}
+            <FormControl fullWidth margin="dense">
+              <InputLabel id="move-card-target-list-label">Move to List</InputLabel>
+              <Select
+                labelId="move-card-target-list-label"
+                value={targetListId}
+                label="Move to List"
+                onChange={(e) => setTargetListId(e.target.value)}
+                disabled={availableListsForMove.length === 0}
+              >
+                <MenuItem value=""><em>Select a list...</em></MenuItem>
+                {availableListsForMove.map(list => (
+                  <MenuItem key={list.id} value={list.id}>{list.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <FormControl fullWidth margin="dense" disabled={!isBoardOwner && !isCollaboratorOrAssignee}>
               <InputLabel id="supervisor-label">Supervisor</InputLabel>
               <Select
@@ -228,9 +272,16 @@ const CardDetailModal = ({ open, onClose, card }) => {
           </Grid>
         </Grid>
       </DialogContent>
-      <DialogActions sx={{ p: '16px 24px' }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" disabled={listCardOpStatus.startsWith('loading')}>Save Changes</Button>
+      <DialogActions sx={{ p: '16px 24px', justifyContent: 'space-between' }}> {/* Adjusted for more buttons */}
+        <Box> {/* Group action buttons */}
+          <Button onClick={handleMoveCard} color="secondary" disabled={!targetListId || listCardOpStatus.startsWith('loading')}>
+            Move Card
+          </Button>
+        </Box>
+        <Box> {/* Group save/cancel */}
+          <Button onClick={onClose} sx={{ mr: 1 }}>Cancel</Button>
+          <Button onClick={handleSave} variant="contained" disabled={listCardOpStatus.startsWith('loading')}>Save Changes</Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

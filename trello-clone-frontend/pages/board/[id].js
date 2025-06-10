@@ -68,8 +68,9 @@ export default function BoardPage() {
     };
 
     ws.onmessage = (event) => {
+      console.log('Raw WS message received:', event.data);
       // TODO: Handle incoming messages from the server
-      console.log('WebSocket message received for board:', id, event.data);
+      // console.log('WebSocket message received for board:', id, event.data); // This line is redundant if raw data is logged above
       try {
         const message = JSON.parse(event.data);
         console.log('Parsed WebSocket message:', message);
@@ -169,7 +170,7 @@ export default function BoardPage() {
         wsRef.current = null;
       }
     };
-  }, [id, token, mounted, dispatch, currentBoard, router]); // Added dispatch, currentBoard, router to dependencies
+  }, [id, token, mounted, dispatch, router]); // Removed currentBoard from dependencies
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -184,6 +185,7 @@ export default function BoardPage() {
       if (!token) {
         router.push('/login');
       } else if (id && currentBoardStatus === 'idle' && !currentBoard) { // Fetch only if not already loaded
+        console.log(`BoardPage: Dispatching fetchBoardDetails for board ID: ${id}. Current Status: ${currentBoardStatus}. Has currentBoard: ${!!currentBoard}`);
         dispatch(fetchBoardDetails(id));
       }
     }
