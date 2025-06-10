@@ -16,6 +16,9 @@ export default function RegisterPage() {
   useEffect(() => {
     if (user) {
       router.push('/'); // Redirect if already logged in
+    } else if (status === 'succeeded') {
+      router.push('/login'); // Redirect to login after successful registration
+      dispatch(resetAuthStatus()); // Reset status after successful registration
     }
     return () => {
         if (status === 'failed') {

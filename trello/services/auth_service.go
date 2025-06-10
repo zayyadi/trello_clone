@@ -53,6 +53,14 @@ func (s *AuthService) Register(username, email, password string) (*models.User, 
 	return user, token, nil
 }
 
+func (s *AuthService) GetAllUsers() ([]models.User, error) {
+	users, err := s.userRepo.FindAll()
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (s *AuthService) Login(email, password string) (*models.User, string, error) {
 	user, err := s.userRepo.FindByEmail(email)
 	if err != nil {

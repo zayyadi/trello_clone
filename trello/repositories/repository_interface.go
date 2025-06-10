@@ -10,6 +10,7 @@ type UserRepositoryInterface interface {
 	Create(user *models.User) error
 	FindByEmail(email string) (*models.User, error)
 	FindByID(id uint) (*models.User, error)
+	FindAll() ([]models.User, error)
 }
 
 // BoardRepositoryInterface defines the contract for board repository operations.

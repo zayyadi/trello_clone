@@ -17,6 +17,7 @@ type MockUserRepository struct {
 	CreateFunc      func(user *models.User) error
 	FindByEmailFunc func(email string) (*models.User, error)
 	FindByIDFunc    func(id uint) (*models.User, error)
+	FindAllFunc     func() ([]models.User, error) // Add FindAllFunc
 
 	// Store calls if needed for assertions
 	CreateCalledWith      *models.User
@@ -49,6 +50,13 @@ func (m *MockUserRepository) FindByID(id uint) (*models.User, error) {
 	}
 	// Default behavior: return nil, and a "not found" error to mimic gorm.ErrRecordNotFound
 	return nil, gorm.ErrRecordNotFound
+}
+
+func (m *MockUserRepository) FindAll() ([]models.User, error) {
+	if m.FindAllFunc != nil {
+		return m.FindAllFunc()
+	}
+	return nil, nil // Default behavior: return empty slice, no error
 }
 
 // Ensure MockUserRepository implements UserRepositoryInterface
@@ -219,7 +227,6 @@ func TestAuthService_Register_TokenGenerationError(t *testing.T) {
 	// We might want to check for a specific error type if GenerateJWT returns one
 	// For example: assert.Equal(t, utils.ErrTokenGeneration, err)
 }
-
 
 func TestAuthService_Login_Success(t *testing.T) {
 	mockRepo := &MockUserRepository{}

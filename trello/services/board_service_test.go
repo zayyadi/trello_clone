@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zayyadi/trello/models"
+	"github.com/zayyadi/trello/realtime"
 	"github.com/zayyadi/trello/repositories"
 	"gorm.io/gorm"
 )
@@ -140,6 +141,7 @@ type MockUserRepositoryForBoardService struct {
 	CreateFunc      func(user *models.User) error
 	FindByEmailFunc func(email string) (*models.User, error)
 	FindByIDFunc    func(id uint) (*models.User, error)
+	FindAllFunc     func() ([]models.User, error) // Add FindAllFunc
 
 	// Store calls
 	CreateCalledWithUser  *models.User
@@ -169,14 +171,42 @@ func (m *MockUserRepositoryForBoardService) FindByID(id uint) (*models.User, err
 	return nil, errors.New("FindByIDFunc not implemented")
 }
 
+func (m *MockUserRepositoryForBoardService) FindAll() ([]models.User, error) {
+	if m.FindAllFunc != nil {
+		return m.FindAllFunc()
+	}
+	return nil, nil // Default behavior: return empty slice, no error
+}
+
+// MockHub is a mock implementation of realtime.Hub for testing purposes
+type MockHub struct {
+	SubmitFunc func(msg *realtime.WebSocketMessage)
+	RunFunc    func()
+	Register   chan *realtime.Client
+	Unregister chan *realtime.Client
+}
+
+func (m *MockHub) Submit(msg *realtime.WebSocketMessage) {
+	if m.SubmitFunc != nil {
+		m.SubmitFunc(msg)
+	}
+}
+
+func (m *MockHub) Run() {
+	if m.RunFunc != nil {
+		m.RunFunc()
+	}
+}
+
 var _ repositories.UserRepositoryInterface = (*MockUserRepositoryForBoardService)(nil)
 
 func TestBoardService_CreateBoard_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	ownerID := uint(1)
 	boardName := "Test Board"
@@ -233,8 +263,9 @@ func TestBoardService_CreateBoard_ErrOnBoardCreate(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	ownerID := uint(1)
 	boardName := "Test Board"
@@ -269,8 +300,9 @@ func TestBoardService_CreateBoard_ErrOnAddOwnerAsMember(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	ownerID := uint(1)
 	boardName := "Test Board"
@@ -306,8 +338,9 @@ func TestBoardService_GetBoardByID_SuccessAsOwner(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -345,8 +378,9 @@ func TestBoardService_GetBoardByID_SuccessAsMember(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	boardOwnerID := uint(10)
@@ -386,8 +420,9 @@ func TestBoardService_GetBoardByID_IsMemberError(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	boardOwnerID := uint(10)
@@ -426,8 +461,9 @@ func TestBoardService_GetBoardsForUser_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	userID := uint(1)
 	expectedBoards := []models.Board{
@@ -458,8 +494,9 @@ func TestBoardService_GetBoardsForUser_NoBoards(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	userID := uint(1)
 	expectedBoards := []models.Board{}
@@ -481,8 +518,9 @@ func TestBoardService_GetBoardsForUser_Error(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	userID := uint(1)
 	expectedError := errors.New("DB error FindByOwnerOrMember")
@@ -504,8 +542,9 @@ func TestBoardService_UpdateBoard_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -554,8 +593,9 @@ func TestBoardService_UpdateBoard_BoardNotFound(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -585,8 +625,9 @@ func TestBoardService_UpdateBoard_Forbidden(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(5)
@@ -623,8 +664,9 @@ func TestBoardService_UpdateBoard_ErrOnUpdate(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -667,8 +709,9 @@ func TestBoardService_UpdateBoard_ErrOnFinalFindByID(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -711,8 +754,9 @@ func TestBoardService_DeleteBoard_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -744,8 +788,9 @@ func TestBoardService_DeleteBoard_BoardNotFound(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -772,8 +817,9 @@ func TestBoardService_DeleteBoard_Forbidden(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(5)
@@ -807,8 +853,9 @@ func TestBoardService_DeleteBoard_ErrOnDelete(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -842,8 +889,9 @@ func TestBoardService_DeleteBoard_ErrOnFindByID(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	currentUserID := uint(10)
@@ -871,8 +919,9 @@ func TestBoardService_AddMemberToBoard_SuccessByEmail(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -931,8 +980,9 @@ func TestBoardService_AddMemberToBoard_SuccessByUserID(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -978,8 +1028,9 @@ func TestBoardService_AddMemberToBoard_BoardNotFound(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1010,8 +1061,9 @@ func TestBoardService_AddMemberToBoard_Forbidden(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	actualOwnerID := uint(5)
@@ -1041,8 +1093,9 @@ func TestBoardService_AddMemberToBoard_UserToAddNotFoundByEmail(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1070,8 +1123,9 @@ func TestBoardService_AddMemberToBoard_UserToAddNotFoundByID(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1099,8 +1153,9 @@ func TestBoardService_AddMemberToBoard_UserAlreadyMember(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1137,8 +1192,9 @@ func TestBoardService_AddMemberToBoard_OwnerCannotBeAddedAsMember(t *testing.T) 
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1170,8 +1226,9 @@ func TestBoardService_AddMemberToBoard_InvalidInput(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
+	mockHub := &MockHub{} // Initialize mock hub
 
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1199,7 +1256,8 @@ func TestBoardService_AddMemberToBoard_ErrOnUserFindByEmail(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1225,7 +1283,8 @@ func TestBoardService_AddMemberToBoard_ErrOnUserFindByID(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1251,7 +1310,8 @@ func TestBoardService_AddMemberToBoard_ErrOnIsMember(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1281,7 +1341,8 @@ func TestBoardService_AddMemberToBoard_ErrOnAddMember(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1315,7 +1376,8 @@ func TestBoardService_AddMemberToBoard_ErrOnFinalFindByBoardIDAndUserID(t *testi
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1347,7 +1409,8 @@ func TestBoardService_RemoveMemberFromBoard_Success(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
@@ -1384,7 +1447,8 @@ func TestBoardService_RemoveMemberFromBoard_BoardNotFound(t *testing.T) {
 	mockBoardRepo := &MockBoardRepository{}
 	mockUserRepo := &MockUserRepositoryForBoardService{}
 	mockBoardMemberRepo := &MockBoardMemberRepository{}
-	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo)
+	mockHub := &MockHub{} // Initialize mock hub
+	boardService := NewBoardService(mockBoardRepo, mockUserRepo, mockBoardMemberRepo, mockHub)
 
 	boardID := uint(1)
 	ownerID := uint(10)
