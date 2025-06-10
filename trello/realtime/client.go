@@ -43,7 +43,7 @@ func (c *Client) ReadPump() { // Changed to ReadPump to match ws_handler.go
 	defer func() {
 		c.Hub.unregister <- c
 		c.Conn.Close()
-		log.Printf("Client disconnected from board %d (readPump cleanup)", c.BoardID)
+		log.Printf("INFO [WebSocket ReadPump]: Finished cleanup for client (User: %d, Board: %d, Remote: %s)", c.UserID, c.BoardID, c.Conn.RemoteAddr())
 	}()
 	c.Conn.SetReadLimit(maxMessageSize)
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -53,15 +53,14 @@ func (c *Client) ReadPump() { // Changed to ReadPump to match ws_handler.go
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				log.Printf("ERROR [WebSocket ReadPump]: Unexpected close error for User: %d, Board: %d, Client: %s: %v", c.UserID, c.BoardID, c.Conn.RemoteAddr(), err)
+			} else {
+				log.Printf("INFO [WebSocket ReadPump]: Read error / connection closed for User: %d, Board: %d, Client: %s: %v", c.UserID, c.BoardID, c.Conn.RemoteAddr(), err)
 			}
-			log.Printf("Client read error on board %d, disconnecting: %v", c.BoardID, err)
-			break
+			break // Exit loop
 		}
 		// For now, messages from clients are discarded.
-		// If client-to-server messages were needed (e.g., user actions),
-		// they would be processed here and potentially passed to the hub.
-		log.Printf("Received message from client on board %d (discarded): %s", c.BoardID, message)
+		log.Printf("INFO [WebSocket ReadPump]: Received message from client (User: %d, Board: %d, Remote: %s) (currently discarded): %s", c.UserID, c.BoardID, c.Conn.RemoteAddr(), message)
 	}
 }
 
@@ -75,33 +74,46 @@ func (c *Client) WritePump() { // Changed to WritePump to match ws_handler.go
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
-		log.Printf("Client disconnected from board %d (writePump cleanup)", c.BoardID)
+		log.Printf("INFO [WebSocket WritePump]: Finished cleanup for client (User: %d, Board: %d, Remote: %s)", c.UserID, c.BoardID, c.Conn.RemoteAddr())
 	}()
 	for {
 		select {
 		case message, ok := <-c.Send:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// The hub closed the channel.
-				log.Printf("Hub closed channel for client on board %d. Sending close message.", c.BoardID)
+				// The hub closed the c.Send channel.
+				log.Printf("INFO [WebSocket WritePump]: Hub closed send channel for client (User: %d, Board: %d, Remote: %s). Sending close message.", c.UserID, c.BoardID, c.Conn.RemoteAddr())
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
+				return // Exit goroutine
 			}
 
-			err := c.Conn.WriteMessage(websocket.TextMessage, message)
+			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				log.Printf("Error writing message to client on board %d: %v", c.BoardID, err)
-				return
+				log.Printf("ERROR [WebSocket WritePump]: Error getting next writer for client (User: %d, Board: %d, Remote: %s): %v", c.UserID, c.BoardID, c.Conn.RemoteAddr(), err)
+				return // Exit goroutine
 			}
-			// log.Printf("Sent message to client on board %d: %s", c.BoardID, message) // Can be too verbose
+			w.Write(message)
+
+			// Add queued messages to the current websocket message.
+			n := len(c.Send)
+			for i := 0; i < n; i++ {
+				w.Write([]byte{'\n'}) // Add a newline if sending multiple messages in one frame
+				w.Write(<-c.Send)
+			}
+
+			if err := w.Close(); err != nil {
+				log.Printf("ERROR [WebSocket WritePump]: Error closing writer for client (User: %d, Board: %d, Remote: %s): %v", c.UserID, c.BoardID, c.Conn.RemoteAddr(), err)
+				return // Exit goroutine
+			}
+			// log.Printf("INFO [WebSocket WritePump]: Sent message to client (User: %d, Board: %d, Remote: %s)", c.UserID, c.BoardID, c.Conn.RemoteAddr())
 
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("Error sending ping to client on board %d: %v", c.BoardID, err)
-				return
+				log.Printf("ERROR [WebSocket WritePump]: Ping failed for client (User: %d, Board: %d, Remote: %s): %v. Closing connection.", c.UserID, c.BoardID, c.Conn.RemoteAddr(), err)
+				return // Exit goroutine
 			}
-			// log.Printf("Sent ping to client on board %d", c.BoardID) // Can be too verbose
+			// log.Printf("INFO [WebSocket WritePump]: Sent ping to client (User: %d, Board: %d, Remote: %s)", c.UserID, c.BoardID, c.Conn.RemoteAddr())
 		}
 	}
 }
